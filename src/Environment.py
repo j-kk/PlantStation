@@ -2,7 +2,7 @@ from datetime import timedelta, datetime
 from gpiozero import DigitalOutputDevice, GPIOZeroError
 from sched import scheduler
 from configparser import ConfigParser
-from helpers import strToTimedelta
+from helpers import format_validators
 from enum import Enum, auto
 
 CONFIGFILE_DEFAULT_PATH = 'environment.cfg'
@@ -33,7 +33,7 @@ class Plant:
     wateringInterval: timedelta
     lastTimeWatered: datetime.min
     pumpSwitch: DigitalOutputDevice
-    plantEnvironment: None  # TODO typing - Environment
+    plantEnvironment: Envirenment  
     global DEFAULT_INTERVAL
 
     def __init__(self, plant_name: str, gpio_pin_number: str, watering_duration: timedelta,
@@ -106,7 +106,7 @@ class Environment:
     def read_config(self):
         config = ConfigParser()
         if not config.read(filenames=self.cfg_path):
-            raise Exception('Error: environment.cfg file not found. Quitting!')
+            raise FileNotFoundError('Error: environment.cfg file not found. Quitting!')
 
         # read global section
         global globalConfigSection
@@ -118,27 +118,30 @@ class Environment:
         except KeyError:
             print('Warning: DEFAULT_INTERVAL unset; setting to 300s')
         except ValueError:
-            raise Exception('Error: DEFAULT_INTERVAL value is not a number. Quitting!')
+            raise ValueError('Error: DEFAULT_INTERVAL value is not a number. Quitting!')
 
         # read plants
         for section in config:
             if section != 'GLOBAL':
                 section_name = section.name
                 try:
+                    format_validators.is_gpio(str(section_name['gpioPinNumber']))
+
                     params = {'plantName': str(section.name),
                               'wateringDuration': timedelta(seconds=int(section['wateringDuration'])),
-                              'wateringInterval': strToTimedelta.parse(time_str=section['wateringInterval']),
+                              'wateringInterval': format_validators.datetime_regex(
+                                  time_str=section['wateringInterval']),
                               'lastTimeWatered': datetime.strptime(date_string=section['lastTimeWatered'],
                                                                    format='%Y-%m-%d %H:%M%:%S'),
-                              'gpioPinNumber': str(section['gpioPinNumber'])}  # TODO regex
+                              'gpioPinNumber': str(section['gpioPinNumber'])}
 
                     new_plant = Plant(**params)
 
                     self.plants.append(new_plant)
                 except KeyError as err:
                     print(
-                        'Warning: environment.cfg: Failed to read ' + section_name + 'section - option not found ' + str(
-                            err))
+                        'Warning: environment.cfg: Failed to read ' + section_name + 'section - option not found '
+                        + str(err))
                 except ValueError:
                     print('Warning: environment.cfg: Failed to read ' + section_name + 'section - wrong argument value')
                 except Exception as err:
@@ -191,6 +194,7 @@ class Environment:
         try:
             cfg_file = open(file=self.cfg_path, mode='w')
             config.write(fp=cfg_file)
+            cfg_file.close()
         except IOError:
             raise Exception('Error: Couldn\'t write config to file')
 

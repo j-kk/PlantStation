@@ -1,6 +1,8 @@
 colorzero==1.1
-daemon==1.2
+docutils==0.15.1
 gpiozero==1.5.1
+lockfile==0.12.2
 pigpio==1.42
+python-daemon==2.2.3
 python-dateutil==2.8.0
 six==1.12.0
