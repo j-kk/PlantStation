@@ -1,92 +1,13 @@
-from datetime import timedelta, datetime
-from gpiozero import DigitalOutputDevice, GPIOZeroError
-from sched import scheduler
 from configparser import ConfigParser
-from helpers import format_validators
-from enum import Enum, auto
+from datetime import timedelta, datetime
+from sched import scheduler
+from typing import Callable
+
+from PlantStation.Plant import Plant
+from PlantStation.helpers import format_validators
+from PlantStation.helpers.sched_states import SchedState, SchedPriorityTable
 
 CONFIGFILE_DEFAULT_PATH = 'environment.cfg'
-
-
-class SchedPriorityTable(Enum):
-    # priority low to high
-    waterOn = auto()
-    isItRightToWaterNow = auto()
-    SCHED_STOP = auto()
-    waterOff = auto()
-
-
-class SchedState(Enum):
-    RUNNING = ()
-    PAUSED = ()
-    STOPPED = ()
-    UNSET = ()
-
-
-DEFAULT_INTERVAL = 300
-
-
-class Plant:
-    plantName = ''
-    gpioPinNumber: str
-    wateringDuration: timedelta
-    wateringInterval: timedelta
-    lastTimeWatered: datetime.min
-    pumpSwitch: DigitalOutputDevice
-    plantEnvironment: Envirenment  
-    global DEFAULT_INTERVAL
-
-    def __init__(self, plant_name: str, gpio_pin_number: str, watering_duration: timedelta,
-                 watering_interval: timedelta,
-                 environment: None):
-        self.plantName = plant_name
-        self.wateringDuration = watering_duration
-        self.wateringInterval = watering_interval
-        self.gpioPinNumber = gpio_pin_number
-        self.plantEnvironment = environment
-        try:
-            self.pumpSwitch = DigitalOutputDevice(gpio_pin_number, active_high=False, initial_value=True)
-        except GPIOZeroError:
-            raise Exception("Error: Couldn't set up gpio pin. Quitting!")
-
-    def water_off(self):
-        try:
-            self.pumpSwitch.off()
-            self.lastTimeWatered = datetime.now()
-            self.plantEnvironment.updateConfigSection(sectionName=self.plantName, option='lastTimeWatered',
-                                                      val=self.lastTimeWatered)
-            self.plantEnvironment.envScheduler.enter(delay=self.wateringInterval,
-                                                     priority=SchedPriorityTable.isItRigthToWaterNow,
-                                                     action=self.should_water())
-        except GPIOZeroError:
-            self.plantEnvironment.envScheduler.enter(delay=0, priority=SchedPriorityTable.SCHED_STOP,
-                                                     action=self.plantEnvironment.killScheduler())
-            raise Exception('ERROR: GPIO error. Quitting!')
-        except Exception as err:
-            self.plantEnvironment.envScheduler.enter(delay=0, priority=SchedPriorityTable.SCHED_STOP,
-                                                     action=self.plantEnvironment.killScheduler())
-            raise err
-
-    def water_on(self):
-        try:
-            self.pumpSwitch.on()
-            self.plantEnvironment.envScheduler.enter(delay=self.wateringDuration,
-                                                     priority=SchedPriorityTable.waterOff,
-                                                     action=self.water_off())
-        except GPIOZeroError:
-            self.plantEnvironment.envScheduler.enter(delay=0, priority=SchedPriorityTable.SCHED_STOP,
-                                                     action=self.plantEnvironment.killScheduler())
-            raise Exception('ERROR: GPIO error. Quitting!')
-
-    def should_water(self):
-        if datetime.now() - self.lastTimeWatered >= self.wateringInterval:
-            # sched water
-            self.plantEnvironment.envScheduler.enter(delay=0, priority=SchedPriorityTable.waterOn,
-                                                     action=self.water_on())
-        else:
-            self.plantEnvironment.envScheduler.enter(delay=DEFAULT_INTERVAL,
-                                                     priority=SchedPriorityTable.isItRightToWaterNow,
-                                                     action=self.should_water())
 
 
 class Environment:
@@ -149,7 +70,7 @@ class Environment:
 
     def schedule_monitoring(self):
         for plant in self.plants:
-            plant.should_water()
+            self.__handle_sched_action(plant.should_water())
         self.envSchedulerState = SchedState.STOPPED
 
     def start(self):
@@ -161,6 +82,22 @@ class Environment:
             self.envSchedulerState = SchedState.PAUSED
             self.envScheduler.enter(delay=0, priority=SchedPriorityTable.SCHED_STOP, action=self.__stop_scheduler())
 
+    def __handle_sched_action(self, func: Callable[[None], any]) -> {}:
+        try:
+
+            params: {} = func(None)
+
+            if 'config_params' in params:
+                self.__update_config_section(**params['config_params'])
+
+            if 'sched_params' in params:
+                self.envScheduler.enter(**params['sched_params'])
+
+        except Exception as err:
+            self.envScheduler.enter(delay=0, priority=SchedPriorityTable.SCHED_STOP,
+                                    action=self.__kill_scheduler())
+            raise err
+
     def __stop_scheduler(self):
         for event in self.envScheduler.queue:
             if event.action == Plant.water_off:
@@ -170,7 +107,7 @@ class Environment:
 
         self.envSchedulerState = SchedState.STOPPED
 
-    def kill_scheduler(self):
+    def __kill_scheduler(self):
         for event in self.envScheduler.queue:
             if event.action == Plant.water_off:
                 event.action()
@@ -184,7 +121,7 @@ class Environment:
         self.envSchedulerState = SchedState.RUNNING
         self.envScheduler.run()
 
-    def update_config_section(self, section_name: str, option: str, val):
+    def __update_config_section(self, section_name: str, option: str, val):
         config = ConfigParser()
 
         if not config.read(filenames=self.cfg_path):
@@ -197,23 +134,3 @@ class Environment:
             cfg_file.close()
         except IOError:
             raise Exception('Error: Couldn\'t write config to file')
-
-
-mainEnvironment: Environment
-
-
-def setup_env():
-    global mainEnvironment
-    mainEnvironment = Environment()
-    mainEnvironment.read_config()
-    mainEnvironment.schedule_monitoring()
-
-
-def run_env():
-    global mainEnvironment
-    mainEnvironment.start()
-
-
-def stop_env():
-    global mainEnvironment
-    mainEnvironment.stop()

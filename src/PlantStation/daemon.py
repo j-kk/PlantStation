@@ -1,7 +1,7 @@
 import signal
 import daemon
 import lockfile
-from src.Environment import setup_env, run_env, stop_env
+from PlantStation.main import setup_env, run_env, stop_env
 
 CONFIG_PATH = 'enviroment.cfg'
 LOGFILE_PATH = '/var/log/plantstation.log'
@@ -9,7 +9,8 @@ LOGFILE_PATH = '/var/log/plantstation.log'
 context = daemon.DaemonContext(
     working_directory='/etc/plantstation',
     umask=0o022,
-    pidfile=lockfile.FileLock('/var/run/plantstation')
+    pidfile=lockfile.FileLock('/var/run/plantstation'),
+    stdout='LOGFI'
     )
 
 context.signal_map = {
