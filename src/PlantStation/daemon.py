@@ -20,7 +20,10 @@ context.signal_map = {
     }
 
 
-def setupLogger():
+def setupLogger() -> None:
+    """Sets up daemon logger
+
+    """
     context.files_preserve = [LOGFILE_PATH]
 
     logger = logging.getLogger('PlantStation')

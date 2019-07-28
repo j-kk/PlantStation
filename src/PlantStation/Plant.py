@@ -1,59 +1,103 @@
 import logging
 from datetime import timedelta, datetime
-from typing import Callable
 from gpiozero import DigitalOutputDevice, GPIOZeroError
 from PlantStation.helpers.sched_states import SchedPriorityTable
-
 
 
 DEFAULT_INTERVAL = 300
 
 
 class Plant:
-    plantName = ''
-    gpioPinNumber: str
-    wateringDuration: timedelta
-    wateringInterval: timedelta
-    lastTimeWatered: datetime.min
-    pumpSwitch: DigitalOutputDevice
-    plantLogger: logging.Logger
+    """Representation of a plant
+
+    Allows to water on/off plant or check is it right moment to water plant
+
+    Attributes:
+    -----------
+
+    plantName  : str
+        Name of the plant
+
+    Methods:
+    --------
+
+    water_on()
+        Turns on pump and returns Event kwargs
+
+    water_off()
+        Turns off pump, returns Event kwargs and config changes kwargs
+    """
+    plantName : str
+    _gpioPinNumber: str
+    _wateringDuration: timedelta
+    _wateringInterval: timedelta
+    _lastTimeWatered: datetime.min
+    _pumpSwitch: DigitalOutputDevice
+    _plantLogger: logging.Logger
+    __dryRun: bool
     global DEFAULT_INTERVAL
 
-    def __init__(self, plant_name: str, gpio_pin_number: str, watering_duration: timedelta,
-                 watering_interval: timedelta, env_name: str):
+    def __init__(self, plant_name: str, gpio_pin_number: str, last_time_watered: datetime,
+                 watering_duration: timedelta, watering_interval: timedelta, env_name: str,
+                 dry_run: bool = False):
+        """
+        Args:
+            plant_name (str): Plant name
+            gpio_pin_number (str): GPIO number, either BOARDXX or GPIOXX where
+                XX is a pin number
+            last_time_watered (datetime): When plant was watered last time?
+            watering_duration (timedelta): How long should the plant be watered?
+            watering_interval (timedelta): Time between watering
+            env_name (str): Environment name
+            dry_run (bool): Dry run - don't interfere with GPIO pins etc.
+        """
         self.plantName = plant_name
-        self.wateringDuration = watering_duration
-        self.wateringInterval = watering_interval
-        self.gpioPinNumber = gpio_pin_number
-        self.plantLogger = logging.getLogger(__package__ + "." + env_name + "." + plant_name)
-        try:
-            self.pumpSwitch = DigitalOutputDevice(gpio_pin_number, active_high=False, initial_value=True)
-        except GPIOZeroError:
-            self.plantLogger.error("Plant %s: Couldn't set up gpio pin: %s", self.plantName, self.gpioPinNumber)
-            raise Exception("Couldn't set up gpio pin. Quitting!")
+        self._lastTimeWatered = last_time_watered
+        self._wateringDuration = watering_duration
+        self._wateringInterval = watering_interval
+        self._gpioPinNumber = gpio_pin_number
+        self._plantLogger = logging.getLogger(__package__ + "." + env_name + "." + plant_name)
+        self.__dryRun = dry_run
+        if not dry_run:
+            try:
+                self.pumpSwitch = DigitalOutputDevice(gpio_pin_number, active_high=False, initial_value=True)
+            except GPIOZeroError:
+                self._plantLogger.error("Plant %s: Couldn't set up gpio pin: %s", self.plantName, self._gpioPinNumber)
+                raise Exception("Couldn't set up gpio pin. Quitting!")
 
     def water_on(self):
+        """Turns on pump and return Event kwargs
+
+        Returns:
+            {}: **kwargs** -- Event kwargs
+        """
         try:
-            self.plantLogger.info("%s: Started watering", self.plantName)
-            self.pumpSwitch.on()
+            self._plantLogger.info("%s: Started watering", self.plantName)
+            if not self.__dryRun:
+                self.pumpSwitch.on()
             params = {
                 'sched_params': {
-                    'delay': self.wateringDuration,
+                    'delay': self._wateringDuration,
                     'priority': SchedPriorityTable.waterOff,
                     'action': self.water_off
                 }
             }
             return params
         except GPIOZeroError:
-            self.plantLogger.error("%s: GPIO error", self.plantName)
+            self._plantLogger.error("%s: GPIO error", self.plantName)
             raise Exception('GPIO error. Quitting!')
 
-    def water_off(self, config_updater: Callable[[str, datetime], None]):
+    def water_off(self):
+        """Turns off pump, returns Event kwargs and config changes kwargs
+
+        Returns:
+            {}: **kwargs** -- Event kwargs and config changes kwargs
+        """
         try:
-            self.plantLogger.info("%s: Stopping watering", self.plantName)
-            self.pumpSwitch.off()
+            self._plantLogger.info("%s: Stopping watering", self.plantName)
+            if not self.__dryRun:
+                self.pumpSwitch.off()
             self.lastTimeWatered = datetime.now()
-            config_updater('lastTimeWatered', self.lastTimeWatered)
             params = {
                 'sched_params': {
                     'delay': self.DEFAULT_INTERVAL,
@@ -69,15 +113,21 @@ class Plant:
             }
             return params
         except GPIOZeroError:
-            self.plantLogger.error("%s: GPIO error", self.plantName)
+            self._plantLogger.error("%s: GPIO error", self.plantName)
             raise Exception('ERROR: GPIO error. Quitting!')
         except Exception as err:
-            self.plantLogger.error("%s: Other error", self.plantName)
+            self._plantLogger.error("%s: Other error", self.plantName)
             raise err
 
     def should_water(self):
-        if datetime.now() - self.lastTimeWatered >= self.wateringInterval:
-            self.plantLogger.info("%s: It's right to water me now!", self.plantName)
+        """Checks if it is right to water plant now
+
+        Returns:
+            * *Returns appropriate Event kwargs if it is right to water now*
+            * *Either returns water_on event or should_water after DEFAULT_INTERVAL*
+        """
+        if datetime.now() - self.lastTimeWatered >= self._wateringInterval:
+            self._plantLogger.info("%s: It's right to water me now!", self.plantName)
             params = {
                 'sched_params': {
                     'delay': 0,
@@ -86,7 +136,7 @@ class Plant:
                 }
             }
         else:
-            self.plantLogger.info("%s: Give me some time, water me later", self.plantName)
+            self._plantLogger.info("%s: Give me some time, water me later", self.plantName)
             params = {
                 'sched_params': {
                     'delay': self.DEFAULT_INTERVAL,

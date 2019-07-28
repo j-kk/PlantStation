@@ -12,100 +12,160 @@ CONFIGFILE_DEFAULT_PATH = 'environment.cfg'
 
 
 class Environment:
-    """docstring for Environment."""
+    """Environment is a set of plants.
+
+    Class holds information about plants. It is responsible for scheduling
+    all the actions, as based in environment.cfg file.
+
+    Attributes:
+    -----------
+
+    name  : str
+        Name of the environment (default main)
+
+    Methods:
+    --------
+
+    read_config()
+        Reads environment config file
+
+    schedule_monitoring()
+        Sets up event scheduler - Obligatory before starting event scheduler
+
+    start()
+        Starts to look after plants - starting event scheduler
+
+    stop()
+        Stops to look after plants - stopping event scheduler
+    """
     name: str
-    plants = [Plant]
-    envScheduler = scheduler()
-    envSchedulerState = SchedState.UNSET
-    eventsOutOfQueue = []
     cfg_path: str
-    envLogger: logging.Logger
+    _plants: [Plant] = []
+    _envScheduler = scheduler() #TODO create class - advanced scheduler
+    envSchedulerState = SchedState.UNSET
+    _eventsOutOfQueue = []
+    _envLogger: logging.Logger
 
     def __init__(self, name: str = "main"):
+        """
+        Args:
+            name (str): Plant name
+        """
         self.cfg_path = CONFIGFILE_DEFAULT_PATH
 
         self.name = name
         self.read_config()
-        self.envLogger = logging.getLogger(__package__ + "." + name)
-        self.envLogger.info('Created %s environment')
+        self._envLogger = logging.getLogger(__package__ + "." + name)
+        self._envLogger.info('Created %s environment')
         self.start()
 
     def read_config(self):
+        """Reads environment config file
+
+        Reads config file from location defined by CONFIGFILE_DEFAULT_PATH
+        and if provided data are correct, creates Plants with provided data
+        """
         config = ConfigParser()
         if not config.read(filenames=self.cfg_path):
-            self.envLogger.critical('Config file %s not found', CONFIGFILE_DEFAULT_PATH)
+            self._envLogger.critical('Config file %s not found', CONFIGFILE_DEFAULT_PATH)
             raise FileNotFoundError('Error: environment config file not found. Quitting!')
 
         # read global section
-        self.envLogger.info('Reading config file: %s', CONFIGFILE_DEFAULT_PATH)
+        self._envLogger.info('Reading config file: %s', CONFIGFILE_DEFAULT_PATH)
         global globalConfigSection
         globalConfigSection = config['GLOBAL']
 
         global DEFAULT_INTERVAL
         try:
             DEFAULT_INTERVAL = int(globalConfigSection['DEFAULT_INTERVAL'])
-            self.envLogger.info('DEFAULT_INTERVAL set to %d s', DEFAULT_INTERVAL)
+            self._envLogger.info('DEFAULT_INTERVAL set to %d s', DEFAULT_INTERVAL)
         except KeyError:
-            self.envLogger.warning('Warning: DEFAULT_INTERVAL unset. Setting to 300s')
+            self._envLogger.warning('Warning: DEFAULT_INTERVAL unset. Setting to 300s')
         except ValueError:
-            self.envLogger.critical('Error: DEFAULT_INTERVAL value is not a number. Quitting!')
+            self._envLogger.critical('Error: DEFAULT_INTERVAL value is not a number. Quitting!')
             raise ValueError('Error: DEFAULT_INTERVAL value is not a number. Quitting!')
 
-        # read plants
+        # read _plants
         for section in config:
             if section != 'GLOBAL':
                 section_name = section.name
-                self.envLogger.debug('Found new section: %s', section_name)
+                self._envLogger.debug('Found new section: %s', section_name)
                 try:
                     format_validators.is_gpio(str(section_name['gpioPinNumber']))
 
+                    #TODO pass section to Plant instead of reading here
                     params = {'plantName': str(section.name),
                               'wateringDuration': timedelta(seconds=int(section['wateringDuration'])),
-                              'wateringInterval': format_validators.datetime_regex(
+                              'wateringInterval': format_validators.parse_time(
                                   time_str=section['wateringInterval']),
                               'lastTimeWatered': datetime.strptime(date_string=section['lastTimeWatered'],
                                                                    format='%Y-%m-%d %H:%M%:%S'),
                               'gpioPinNumber': str(section['gpioPinNumber'])}
 
                     new_plant = Plant(**params, env_name= self.name)
-                    self.envLogger.info('Found new plant: %s, pin: %s', params['plantName'], params['gpioPinNumber'])
-                    self.plants.append(new_plant)
+                    self._envLogger.info('Found new plant: %s, pin: %s', params['plantName'], params['gpioPinNumber'])
+                    self._plants.append(new_plant)
                 except KeyError as err:
-                    self.envLogger.warning('%s: Failed to read %s section - option not found ', CONFIGFILE_DEFAULT_PATH,
-                                           section_name, str(err))
+                    self._envLogger.warning('%s: Failed to read %s section - option not found ', CONFIGFILE_DEFAULT_PATH,
+                                            section_name, str(err))
                 except ValueError:
-                    self.envLogger.warning('%s: Failed to read %s section - wrong argument value',
-                                           CONFIGFILE_DEFAULT_PATH, section_name)
+                    self._envLogger.warning('%s: Failed to read %s section - wrong argument value',
+                                            CONFIGFILE_DEFAULT_PATH, section_name)
                 except Exception as err:
-                    self.envLogger.warning('%s: Failed to read %s section %s', CONFIGFILE_DEFAULT_PATH, section_name,
-                                           str(err))
+                    self._envLogger.warning('%s: Failed to read %s section %s', CONFIGFILE_DEFAULT_PATH, section_name,
+                                            str(err))
 
-    def schedule_monitoring(self):
-        self.envLogger.debug('Scheduling monitoring')
-        for plant in self.plants:
+    def schedule_monitoring(self) -> None:
+        """Sets up event scheduler - Obligatory before starting event scheduler
+
+        Schedules to check all plants
+        """
+        self._envLogger.debug('Scheduling monitoring')
+        for plant in self._plants:
             self.__handle_sched_action(plant.should_water)
-        self.envLogger.debug('Scheduler state : STOPPED')
+        self._envLogger.debug('Scheduler state : STOPPED')
         self.envSchedulerState = SchedState.STOPPED
 
-    def start(self):
-        self.envLogger.debug('Starting scheduler. State: %s', self.envSchedulerState)
-        if self.envSchedulerState == SchedState.STOPPED:
-            self.envLogger.info('Starting scheduler')
-            self.__resume_scheduler()
+    def start(self) -> None:
+        """Starts to look after plants
 
-    def stop(self):
-        self.envLogger.debug('Stopping scheduler. State: %s', self.envSchedulerState)
+        Starts environment's event scheduler
+        """
+        self._envLogger.debug('Starting scheduler. State: %s', self.envSchedulerState)
+        if self.envSchedulerState == SchedState.STOPPED:
+            self._envLogger.info('Starting scheduler')
+            self.__resume_scheduler()
+        else:
+            self._envLogger.warning('Can\'t start up scheduler - wrong scheduler state')
+
+    def stop(self) -> None:
+        """Stops to look after plants
+
+        Stops environment's event scheduler
+        """
+        self._envLogger.debug('Stopping scheduler. State: %s', self.envSchedulerState)
         if self.envSchedulerState == SchedState.RUNNING:
             self.envSchedulerState = SchedState.PAUSED
-            self.envLogger.info('Pausing scheduler.')
-            self.envScheduler.enter(delay=0, priority=SchedPriorityTable.SCHED_STOP, action=self.__stop_scheduler())
+            self._envLogger.info('Pausing scheduler.')
+            self._envScheduler.enter(delay=0, priority=SchedPriorityTable.SCHED_STOP, action=self.__stop_scheduler())
 
     def __handle_sched_action(self, func: Callable[[None], any]) -> {}:
+        """Wrapper for all actions in scheduler
+
+        Handles all functions in scheduler to give them access to modify
+        environment's state Function can return:
+
+            'config_params' dict - allows changing option's value in config file
+            'sched_params' dict - allows adding event to scheduler
+
+        Args:
+            func: Function to be handled
+        """
         try:
-            self.envLogger.debug('Handling function')
+            self._envLogger.debug('Handling function')
             params: {} = func(None)
 
-            self.envLogger.debug('Handler: Got params: %s', params)
+            self._envLogger.debug('Handler: Got params: %s', params)
 
             if 'config_params' in params:
                 self.__update_config_section(**params['config_params'])
@@ -114,51 +174,84 @@ class Environment:
                 self.__add_to_scheduler(**params['sched_params'])
 
         except Exception as err:
-            self.envLogger.critical('Handler received exception. Killing scheduler.')
-            self.envScheduler.enter(delay=0, priority=SchedPriorityTable.SCHED_STOP,
-                                    action=self.__kill_scheduler())
+            self._envLogger.critical('Handler received exception. Killing scheduler.')
+            self._envScheduler.enter(delay=0, priority=SchedPriorityTable.SCHED_STOP,
+                                     action=self.__kill_scheduler())
             raise err
 
     def __add_to_scheduler(self, params):
-        if self.envSchedulerState in [SchedState.STOPPED, SchedState.PAUSED]:
-            self.eventsOutOfQueue.append(params)
-        elif self.envSchedulerState in [SchedState.UNSET, SchedState.RUNNING]:
-            self.envScheduler.enter(**params)
+        """Adds event to scheduler in controlled way
 
-    def __stop_scheduler(self):
-        self.envLogger.info('Stopping scheduler. State: %s', self.envSchedulerState)
-        for event in self.envScheduler.queue:
+        Args:
+            params: Scheduler's Event to be added
+        """
+        if self.envSchedulerState in [SchedState.STOPPED, SchedState.PAUSED]:
+            self._eventsOutOfQueue.append(params)
+        elif self.envSchedulerState in [SchedState.UNSET, SchedState.RUNNING]:
+            self._envScheduler.enter(**params)
+        else:
+            pass
+
+    def __stop_scheduler(self) -> None:
+        """Stops scheduler
+
+        Stops all watering tasks and empties scheduler. All tasks are
+        awaiting for resuming scheduler.
+        """
+        self._envLogger.info('Stopping scheduler. State: %s', self.envSchedulerState)
+        for event in self._envScheduler.queue:
             if event.action == Plant.water_off:
-                self.envLogger.info('Calling Plant.water_off forced')
+                self._envLogger.info('Calling Plant.water_off forced')
                 event.action()
             else:
-                self.eventsOutOfQueue.append(event)
-            self.envScheduler.cancel(event)
+                self._eventsOutOfQueue.append(event)
+            self._envScheduler.cancel(event)
         self.envSchedulerState = SchedState.STOPPED
 
-    def __kill_scheduler(self):
-        self.envLogger.info('Killing scheduler. State: %s', self.envSchedulerState)
+    def __kill_scheduler(self) -> None:
+        """Forces scheduler to stop
+
+        Stops all watering tasks and empties scheduler. Can't be resumed
+        after that
+        """
+        self._envLogger.debug('Killing scheduler. State: %s', self.envSchedulerState)
         self.envSchedulerState = SchedState.KILLED
-        for event in self.envScheduler.queue:
+        for event in self._envScheduler.queue:
             if event.action == Plant.water_off:
                 event.action()
-            self.envScheduler.cancel(event)
+            self._envScheduler.cancel(event)
+        self._envLogger.info('Scheduler killed.')
 
-    def __resume_scheduler(self):
-        self.envLogger.info('Resuming scheduler. State: %s', self.envSchedulerState)
-        for event in self.eventsOutOfQueue:
-            self.envScheduler.enter(**event)
+    def __resume_scheduler(self) -> None:
+        """Resumes scheduler
 
-        self.eventsOutOfQueue.clear()
-        self.envSchedulerState = SchedState.RUNNING
-        self.envScheduler.run()
+        Resumes scheduler if stopped. Otherwise does nothing.
+        """
+        self._envLogger.debug('Resuming scheduler. State: %s', self.envSchedulerState)
+        if  self.envSchedulerState == SchedState.STOPPED:
+            for event in self._eventsOutOfQueue:
+                self._envScheduler.enter(**event)
 
-    def __update_config_section(self, section_name: str, option: str, val):
+            self._eventsOutOfQueue.clear()
+            self.envSchedulerState = SchedState.RUNNING
+            self._envScheduler.run()
+            self._envLogger.info('Scheduler resumed')
+        else:
+            self._envLogger.warning('Scheduler is not paused. Can\'t resume')
+
+    def __update_config_section(self, section_name: str, option: str, val: any) -> None:
+        """Updates selected environment config section
+
+        Args:
+            section_name (str): Config section name
+            option (str): Option name to be updated
+            val (any): New value
+        """
         config = ConfigParser()
-        self.envLogger.debug('Updating config section %s %s %s', section_name, option, val)
+        self._envLogger.debug('Updating config section %s %s %s', section_name, option, val)
 
         if not config.read(filenames=self.cfg_path):
-            self.envLogger.error('Environment config file not found')
+            self._envLogger.error('Environment config file not found')
             raise FileNotFoundError('Environment config file not found')
 
         config[section_name][option] = str(val)
@@ -167,5 +260,5 @@ class Environment:
             config.write(fp=cfg_file)
             cfg_file.close()
         except IOError:
-            self.envLogger.error('Couldn\'t write config to file')
+            self._envLogger.error('Couldn\'t write config to file')
             raise Exception('Couldn\'t write config to file')
