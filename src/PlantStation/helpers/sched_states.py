@@ -13,4 +13,5 @@ class SchedState(Enum):
     RUNNING = ()
     PAUSED = ()
     STOPPED = ()
+    KILLED = ()
     UNSET = ()

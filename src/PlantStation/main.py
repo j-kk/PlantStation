@@ -1,9 +1,11 @@
+import logging
 from PlantStation.Environment import Environment
 
 mainEnvironment: Environment
 
 
 def setup_env():
+    logging.basicConfig()
     global mainEnvironment
     mainEnvironment = Environment()
     mainEnvironment.read_config()
