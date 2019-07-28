@@ -83,7 +83,7 @@ class Environment:
     def schedule_monitoring(self):
         self.envLogger.debug('Scheduling monitoring')
         for plant in self.plants:
-            self.__handle_sched_action(plant.should_water())
+            self.__handle_sched_action(plant.should_water)
         self.envLogger.debug('Scheduler state : STOPPED')
         self.envSchedulerState = SchedState.STOPPED
 
