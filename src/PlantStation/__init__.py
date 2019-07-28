@@ -1,9 +1,7 @@
-from pkg_resources import get_distribution, DistributionNotFound
+# coding=utf-8
+"""
+Top-level package for PlantStation project.
+"""
 
-try:
-    dist_name = 'PlantStation'
-    __version__ = get_distribution(dist_name).version
-except DistributionNotFound:
-    __version__ = 'unknown'
-finally:
-    del get_distribution, DistributionNotFound
+__author__ = """Jakub Kowalski"""
+__version__ = '0.1.0'
