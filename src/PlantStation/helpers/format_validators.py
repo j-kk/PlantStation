@@ -10,7 +10,7 @@ def parse_time(time_str: str) -> datetime.timedelta:
     """Parses time to project's time format
 
     Args:
-        time_str (str): Datetime in string format: YYYY-MM-DD HH:MM:SS
+        time_str (str): Datetime in string format: DD HH:MM:SS
 
     Returns:
         datetime.timedelta: converted result
@@ -20,7 +20,7 @@ def parse_time(time_str: str) -> datetime.timedelta:
         raise ValueError('String does not match proper pattern')
     parts = parts.groupdict()
     time_params = {}
-    for (name, param) in parts:
+    for (name, param) in parts.items():
         if param:
             time_params[name] = int(param)
     return datetime.timedelta(**time_params)
