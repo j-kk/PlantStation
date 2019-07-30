@@ -1,9 +1,9 @@
 import re
 import datetime
 
-gpio_regex = re.compile(r'((BOARD)|(GPIO))\d{1,2}')
+gpio_regex = re.compile(r'((BOARD)|(GPIO))\d{1,2}$')
 
-datetime_regex = re.compile(r'((?P<days>\d+?)D)?((?P<hours>\d+?):)?((?P<minutes>\d+?):)?(?P<seconds>\d+?)?')
+datetime_regex = re.compile(r'((?P<days>\d{1,2})D) ((?P<hours>\d{2}):)((?P<minutes>\d{2}):)(?P<seconds>\d{2})$')
 
 
 def parse_time(time_str: str) -> datetime.timedelta:
@@ -23,6 +23,8 @@ def parse_time(time_str: str) -> datetime.timedelta:
     for (name, param) in parts.items():
         if param:
             time_params[name] = int(param)
+        else:
+            raise ValueError('String does not match proper pattern')
     return datetime.timedelta(**time_params)
 
 
