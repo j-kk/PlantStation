@@ -9,7 +9,6 @@ from PlantStation.helpers import format_validators
 from PlantStation.helpers.sched_states import SchedState, SchedPriorityTable
 
 CONFIGFILE_DEFAULT_PATH = 'environment.cfg'
-DEFAULT_INTERVAL = timedelta(seconds=300)
 
 
 class Environment:
@@ -74,17 +73,8 @@ class Environment:
         # read global section
         self._envLogger.info('Reading config file: %s', CONFIGFILE_DEFAULT_PATH)
 
-        global_config_section = config['GLOBAL']
-
-        global DEFAULT_INTERVAL
-        try:
-            DEFAULT_INTERVAL = timedelta(seconds=int(global_config_section['DEFAULT_INTERVAL']))
-            self._envLogger.info('DEFAULT_INTERVAL set to %d s', DEFAULT_INTERVAL)
-        except KeyError:
-            self._envLogger.warning('Warning: DEFAULT_INTERVAL unset. Setting to 300s')
-        except ValueError:
-            self._envLogger.critical('Error: DEFAULT_INTERVAL value is not a number. Quitting!')
-            raise ValueError('Error: DEFAULT_INTERVAL value is not a number. Quitting!')
+        # Left for future - to be implemented
+        # global_config_section = config['GLOBAL']
 
         # read _plants
         for section in config:

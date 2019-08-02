@@ -4,7 +4,8 @@ from datetime import timedelta, datetime
 from gpiozero import DigitalOutputDevice, GPIOZeroError
 from PlantStation.helpers.sched_states import SchedPriorityTable
 from PlantStation.helpers.format_validators import is_gpio
-from PlantStation.Environment import DEFAULT_INTERVAL
+
+DEFAULT_INTERVAL = timedelta(seconds=300)
 
 
 class Plant:
@@ -38,9 +39,10 @@ class Plant:
     _pumpSwitch: DigitalOutputDevice
     _plantLogger: logging.Logger
     __dryRun: bool
+    __DEFAULT_INTERVAL: timedelta
 
     def __init__(self, plant_name: str, env_name: str, gpio_pin_number: str, watering_duration: timedelta,
-                 watering_interval: timedelta = DEFAULT_INTERVAL, last_time_watered: datetime = datetime.min,
+                 watering_interval: timedelta, last_time_watered: datetime = datetime.min,
                  dry_run: bool = False):
         """
         Args:
@@ -53,11 +55,11 @@ class Plant:
             env_name (str): Environment name
             dry_run (bool): Dry run - don't interfere with GPIO pins etc.
         """
-        if last_time_watered < datetime.now():
+        if datetime.now() < last_time_watered:
             raise ValueError('Last time watered is in future')
-        if not datetime.timedelta() < watering_duration:
+        if not timedelta() < watering_duration:
             raise ValueError("Watering duration is negative or equal to 0")
-        if not datetime.timedelta() < watering_interval:
+        if not timedelta() < watering_interval:
             raise ValueError("Watering interval is negative or equal to 0")
         if not is_gpio(gpio_pin_number):
             raise ValueError('Wrong GPIO value')
