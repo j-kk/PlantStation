@@ -91,8 +91,6 @@ class Environment:
                 section_name = section.name
                 self._envLogger.debug('Found new section: %s', section_name)
                 try:
-                    format_validators.is_gpio(str(section_name['gpioPinNumber']))
-
                     #TODO pass section to Plant instead of reading here
                     params = {'plantName': str(section.name),
                               'wateringDuration': timedelta(seconds=int(section['wateringDuration'])),
@@ -108,9 +106,9 @@ class Environment:
                 except KeyError as err:
                     self._envLogger.warning('%s: Failed to read %s section - option not found ', CONFIGFILE_DEFAULT_PATH,
                                             section_name, str(err))
-                except ValueError:
-                    self._envLogger.warning('%s: Failed to read %s section - wrong argument value',
-                                            CONFIGFILE_DEFAULT_PATH, section_name)
+                except ValueError as err:
+                    self._envLogger.warning('%s: Failed to read %s section %s',
+                                            CONFIGFILE_DEFAULT_PATH, section_name, err.args)
                 except Exception as err:
                     self._envLogger.warning('%s: Failed to read %s section %s', CONFIGFILE_DEFAULT_PATH, section_name,
                                             str(err))

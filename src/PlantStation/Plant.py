@@ -1,8 +1,9 @@
 import logging
+import datetime
 from datetime import timedelta, datetime
 from gpiozero import DigitalOutputDevice, GPIOZeroError
 from PlantStation.helpers.sched_states import SchedPriorityTable
-
+from PlantStation.helpers.format_validators import is_gpio
 
 DEFAULT_INTERVAL = 300
 
@@ -26,19 +27,22 @@ class Plant:
 
     water_off()
         Turns off pump, returns Event kwargs and config changes kwargs
+
+    should_water()
+        Checks if it is right time to water now, returns appropriate actions to do in kwargs (new scheduler event)
     """
-    plantName : str
+    plantName: str
     _gpioPinNumber: str
     _wateringDuration: timedelta
     _wateringInterval: timedelta
-    _lastTimeWatered: datetime.min
+    _lastTimeWatered: datetime
     _pumpSwitch: DigitalOutputDevice
     _plantLogger: logging.Logger
     __dryRun: bool
     global DEFAULT_INTERVAL
 
-    def __init__(self, plant_name: str, gpio_pin_number: str, last_time_watered: datetime,
-                 watering_duration: timedelta, watering_interval: timedelta, env_name: str,
+    def __init__(self, plant_name: str, env_name: str, gpio_pin_number: str, watering_duration: timedelta,
+                 watering_interval: timedelta, last_time_watered: datetime = datetime.min,
                  dry_run: bool = False):
         """
         Args:
@@ -51,6 +55,9 @@ class Plant:
             env_name (str): Environment name
             dry_run (bool): Dry run - don't interfere with GPIO pins etc.
         """
+        if not is_gpio(gpio_pin_number):
+            raise ValueError('Wrong GPIO value')
+
         self.plantName = plant_name
         self._lastTimeWatered = last_time_watered
         self._wateringDuration = watering_duration
