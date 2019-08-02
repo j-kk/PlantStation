@@ -55,6 +55,12 @@ class Plant:
             env_name (str): Environment name
             dry_run (bool): Dry run - don't interfere with GPIO pins etc.
         """
+        if last_time_watered < datetime.now():
+            raise ValueError('Last time watered is in future')
+        if not datetime.timedelta() < watering_duration:
+            raise ValueError("Watering duration is negative or equal to 0")
+        if not datetime.timedelta() < watering_interval:
+            raise ValueError("Watering interval is negative or equal to 0")
         if not is_gpio(gpio_pin_number):
             raise ValueError('Wrong GPIO value')
 
