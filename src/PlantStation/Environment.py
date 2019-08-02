@@ -72,12 +72,12 @@ class Environment:
 
         # read global section
         self._envLogger.info('Reading config file: %s', CONFIGFILE_DEFAULT_PATH)
-        global globalConfigSection
-        globalConfigSection = config['GLOBAL']
+
+        global_config_section = config['GLOBAL']
 
         global DEFAULT_INTERVAL
         try:
-            DEFAULT_INTERVAL = int(globalConfigSection['DEFAULT_INTERVAL'])
+            DEFAULT_INTERVAL = int(global_config_section['DEFAULT_INTERVAL'])
             self._envLogger.info('DEFAULT_INTERVAL set to %d s', DEFAULT_INTERVAL)
         except KeyError:
             self._envLogger.warning('Warning: DEFAULT_INTERVAL unset. Setting to 300s')
@@ -91,7 +91,6 @@ class Environment:
                 section_name = section.name
                 self._envLogger.debug('Found new section: %s', section_name)
                 try:
-                    #TODO pass section to Plant instead of reading here
                     params = {'plantName': str(section.name),
                               'wateringDuration': timedelta(seconds=int(section['wateringDuration'])),
                               'wateringInterval': format_validators.parse_time(
@@ -104,14 +103,12 @@ class Environment:
                     self._envLogger.info('Found new plant: %s, pin: %s', params['plantName'], params['gpioPinNumber'])
                     self._plants.append(new_plant)
                 except KeyError as err:
-                    self._envLogger.warning('%s: Failed to read %s section - option not found ', CONFIGFILE_DEFAULT_PATH,
-                                            section_name, str(err))
+                    self._envLogger.warning(f'{CONFIGFILE_DEFAULT_PATH}: Failed to read {section_name} section - '
+                                            f'option not found {str(err)}')
                 except ValueError as err:
-                    self._envLogger.warning('%s: Failed to read %s section %s',
-                                            CONFIGFILE_DEFAULT_PATH, section_name, err.args)
+                    self._envLogger.warning(f'{CONFIGFILE_DEFAULT_PATH}: Failed to read {section_name} section {str(err)}')
                 except Exception as err:
-                    self._envLogger.warning('%s: Failed to read %s section %s', CONFIGFILE_DEFAULT_PATH, section_name,
-                                            str(err))
+                    self._envLogger.warning(f'{CONFIGFILE_DEFAULT_PATH} Failed to read {section_name} section {str(err)}')
 
     def schedule_monitoring(self) -> None:
         """Sets up event scheduler - Obligatory before starting event scheduler
