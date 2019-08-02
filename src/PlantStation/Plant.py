@@ -4,8 +4,7 @@ from datetime import timedelta, datetime
 from gpiozero import DigitalOutputDevice, GPIOZeroError
 from PlantStation.helpers.sched_states import SchedPriorityTable
 from PlantStation.helpers.format_validators import is_gpio
-
-DEFAULT_INTERVAL = 300
+from PlantStation.Environment import DEFAULT_INTERVAL
 
 
 class Plant:
@@ -39,10 +38,9 @@ class Plant:
     _pumpSwitch: DigitalOutputDevice
     _plantLogger: logging.Logger
     __dryRun: bool
-    global DEFAULT_INTERVAL
 
     def __init__(self, plant_name: str, env_name: str, gpio_pin_number: str, watering_duration: timedelta,
-                 watering_interval: timedelta, last_time_watered: datetime = datetime.min,
+                 watering_interval: timedelta = DEFAULT_INTERVAL, last_time_watered: datetime = datetime.min,
                  dry_run: bool = False):
         """
         Args:
@@ -110,10 +108,10 @@ class Plant:
             self._plantLogger.info("%s: Stopping watering", self.plantName)
             if not self.__dryRun:
                 self.pumpSwitch.off()
-            self.lastTimeWatered = datetime.now()
+            self._lastTimeWatered = datetime.now()
             params = {
                 'sched_params': {
-                    'delay': self.DEFAULT_INTERVAL,
+                    'delay': self._wateringInterval,
                     'priority': SchedPriorityTable.should_water,
                     'action': self.should_water
                 },
@@ -121,7 +119,7 @@ class Plant:
                 'config_params': {
                     'section_name': self.plantName,
                     'option': 'lastTimeWatered',
-                    'val': self.lastTimeWatered
+                    'val': self._lastTimeWatered
                 }
             }
             return params
@@ -139,7 +137,7 @@ class Plant:
             * *Returns appropriate Event kwargs if it is right to water now*
             * *Either returns water_on event or should_water after DEFAULT_INTERVAL*
         """
-        if datetime.now() - self.lastTimeWatered >= self._wateringInterval:
+        if datetime.now() - self._lastTimeWatered >= self._wateringInterval:
             self._plantLogger.info("%s: It's right to water me now!", self.plantName)
             params = {
                 'sched_params': {
@@ -152,7 +150,7 @@ class Plant:
             self._plantLogger.info("%s: Give me some time, water me later", self.plantName)
             params = {
                 'sched_params': {
-                    'delay': self.DEFAULT_INTERVAL,
+                    'delay': DEFAULT_INTERVAL,
                     'priority': SchedPriorityTable.should_water,
                     'action': self.should_water
                 }

@@ -9,6 +9,7 @@ from PlantStation.helpers import format_validators
 from PlantStation.helpers.sched_states import SchedState, SchedPriorityTable
 
 CONFIGFILE_DEFAULT_PATH = 'environment.cfg'
+DEFAULT_INTERVAL = timedelta(seconds=300)
 
 
 class Environment:
@@ -41,7 +42,7 @@ class Environment:
     name: str
     cfg_path: str
     _plants: [Plant] = []
-    _envScheduler = scheduler() #TODO create class - advanced scheduler
+    _envScheduler = scheduler()  # TODO create class - advanced scheduler
     envSchedulerState = SchedState.UNSET
     _eventsOutOfQueue = []
     _envLogger: logging.Logger
@@ -77,7 +78,7 @@ class Environment:
 
         global DEFAULT_INTERVAL
         try:
-            DEFAULT_INTERVAL = int(global_config_section['DEFAULT_INTERVAL'])
+            DEFAULT_INTERVAL = timedelta(seconds=int(global_config_section['DEFAULT_INTERVAL']))
             self._envLogger.info('DEFAULT_INTERVAL set to %d s', DEFAULT_INTERVAL)
         except KeyError:
             self._envLogger.warning('Warning: DEFAULT_INTERVAL unset. Setting to 300s')
@@ -99,16 +100,18 @@ class Environment:
                                                                    format='%Y-%m-%d %H:%M%:%S'),
                               'gpioPinNumber': str(section['gpioPinNumber'])}
 
-                    new_plant = Plant(**params, env_name= self.name)
+                    new_plant = Plant(**params, env_name=self.name)
                     self._envLogger.info('Found new plant: %s, pin: %s', params['plantName'], params['gpioPinNumber'])
                     self._plants.append(new_plant)
                 except KeyError as err:
                     self._envLogger.warning(f'{CONFIGFILE_DEFAULT_PATH}: Failed to read {section_name} section - '
                                             f'option not found {str(err)}')
                 except ValueError as err:
-                    self._envLogger.warning(f'{CONFIGFILE_DEFAULT_PATH}: Failed to read {section_name} section {str(err)}')
+                    self._envLogger.warning(
+                        f'{CONFIGFILE_DEFAULT_PATH}: Failed to read {section_name} section {str(err)}')
                 except Exception as err:
-                    self._envLogger.warning(f'{CONFIGFILE_DEFAULT_PATH} Failed to read {section_name} section {str(err)}')
+                    self._envLogger.warning(
+                        f'{CONFIGFILE_DEFAULT_PATH} Failed to read {section_name} section {str(err)}')
 
     def schedule_monitoring(self) -> None:
         """Sets up event scheduler - Obligatory before starting event scheduler
@@ -223,7 +226,7 @@ class Environment:
         Resumes scheduler if stopped. Otherwise does nothing.
         """
         self._envLogger.debug('Resuming scheduler. State: %s', self.envSchedulerState)
-        if  self.envSchedulerState == SchedState.STOPPED:
+        if self.envSchedulerState == SchedState.STOPPED:
             for event in self._eventsOutOfQueue:
                 self._envScheduler.enter(**event)
 

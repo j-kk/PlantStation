@@ -12,12 +12,12 @@ context = daemon.DaemonContext(
     umask=0o022,
     pidfile=lockfile.FileLock('/var/run/plantstation'),
     stdout='LOGFI'
-    )
+)
 
 context.signal_map = {
     signal.SIGTERM: stop_env(),
     signal.SIGHUP: 'terminate'
-    }
+}
 
 
 def setupLogger() -> None:
@@ -29,18 +29,19 @@ def setupLogger() -> None:
     logger = logging.getLogger('PlantStation')
     logger.setLevel(logging.DEBUG)
 
-    loggerFileHandler = logging.FileHandler(LOGFILE_PATH)
-    loggerFileHandler.setLevel(logging.DEBUG)
+    logger_file_handler = logging.FileHandler(LOGFILE_PATH)
+    logger_file_handler.setLevel(logging.DEBUG)
 
-    loggerConsoleHandler = logging.StreamHandler()
-    loggerConsoleHandler.setLevel(logging.ERROR)
+    logger_console_handler = logging.StreamHandler()
+    logger_console_handler.setLevel(logging.ERROR)
 
-    loggerFormatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    loggerFileHandler.setFormatter(loggerFormatter)
-    loggerConsoleHandler.setFormatter(loggerFormatter)
+    logger_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger_file_handler.setFormatter(logger_formatter)
+    logger_console_handler.setFormatter(logger_formatter)
 
-    logger.addHandler(loggerFileHandler)
-    logger.addHandler(loggerConsoleHandler)
+    logger.addHandler(logger_file_handler)
+    logger.addHandler(logger_console_handler)
+
 
 setupLogger()
 setup_env()
