@@ -74,9 +74,9 @@ class Plant:
         if not dry_run:
             try:
                 self.pumpSwitch = DigitalOutputDevice(gpio_pin_number, active_high=False, initial_value=True)
-            except GPIOZeroError:
+            except GPIOZeroError as exc:
                 self._plantLogger.error("Plant %s: Couldn't set up gpio pin: %s", self.plantName, self._gpioPinNumber)
-                raise Exception("Couldn't set up gpio pin. Quitting!")
+                raise exc
 
     def water_on(self):
         """Turns on pump and return Event kwargs
@@ -96,9 +96,9 @@ class Plant:
                 }
             }
             return params
-        except GPIOZeroError:
+        except GPIOZeroError as exc:
             self._plantLogger.error("%s: GPIO error", self.plantName)
-            raise Exception('GPIO error. Quitting!')
+            raise exc
 
     def water_off(self):
         """Turns off pump, returns Event kwargs and config changes kwargs
@@ -125,12 +125,12 @@ class Plant:
                 }
             }
             return params
-        except GPIOZeroError:
+        except GPIOZeroError as exc:
             self._plantLogger.error("%s: GPIO error", self.plantName)
-            raise Exception('ERROR: GPIO error. Quitting!')
-        except Exception as err:
+            raise exc
+        except Exception as exc:
             self._plantLogger.error("%s: Other error", self.plantName)
-            raise err
+            raise exc
 
     def should_water(self):
         """Checks if it is right to water plant now
