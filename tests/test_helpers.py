@@ -10,6 +10,7 @@ __license__ = "mit"
 rand_seed = 1023
 
 
+@pytest.mark.basic
 def test_basic():
     assert parse_time('10D 09:09:09').total_seconds() == datetime.timedelta(days=10, hours=9, minutes=9,
                                                                             seconds=9).total_seconds()
@@ -19,6 +20,7 @@ def test_basic():
         parse_time('10D 9:09:09')
 
 
+@pytest.mark.slow
 def test_random():
     random = Random(rand_seed)
 
@@ -32,6 +34,7 @@ def test_random():
         assert parsed == td
 
 
+@pytest.mark.extended
 def test_value_error():
     with pytest.raises(ValueError):
         parse_time('0D 09:9:09')
@@ -70,6 +73,7 @@ def test_value_error():
         parse_time('0D ::')
 
 
+@pytest.mark.extended
 def test_board():
     for i in range(1, 40):
         assert is_gpio(f'BOARD{i}')
