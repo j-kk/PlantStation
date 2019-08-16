@@ -39,19 +39,19 @@ class Environment:
         Stops to look after plants - stopping event scheduler
     """
     name: str
-    cfg_path: str
+    __cfg_path: str
     _plants: [Plant] = []
     _envScheduler = scheduler()  # TODO create class - advanced scheduler
-    envSchedulerState = SchedState.UNSET
+    _envSchedulerState = SchedState.UNSET
     _eventsOutOfQueue = []
     _envLogger: logging.Logger
 
-    def __init__(self, name: str = "main"):
+    def __init__(self, name: str = "main", cfg_path: str = CONFIGFILE_DEFAULT_PATH):
         """
         Args:
             name (str): Plant name
         """
-        self.cfg_path = CONFIGFILE_DEFAULT_PATH
+        self.__cfg_path = cfg_path
 
         self.name = name
         self.read_config()
@@ -66,7 +66,7 @@ class Environment:
         and if provided data are correct, creates Plants with provided data
         """
         config = ConfigParser()
-        if not config.read(filenames=self.cfg_path):
+        if not config.read(filenames=self.__cfg_path):
             self._envLogger.critical('Config file %s not found', CONFIGFILE_DEFAULT_PATH)
             raise FileNotFoundError('Error: environment config file not found. Quitting!')
 
@@ -112,15 +112,15 @@ class Environment:
         for plant in self._plants:
             self.__handle_sched_action(plant.should_water)
         self._envLogger.debug('Scheduler state : STOPPED')
-        self.envSchedulerState = SchedState.STOPPED
+        self._envSchedulerState = SchedState.STOPPED
 
     def start(self) -> None:
         """Starts to look after plants
 
         Starts environment's event scheduler
         """
-        self._envLogger.debug('Starting scheduler. State: %s', self.envSchedulerState)
-        if self.envSchedulerState == SchedState.STOPPED:
+        self._envLogger.debug('Starting scheduler. State: %s', self._envSchedulerState)
+        if self._envSchedulerState == SchedState.STOPPED:
             self._envLogger.info('Starting scheduler')
             self.__resume_scheduler()
         else:
@@ -131,9 +131,9 @@ class Environment:
 
         Stops environment's event scheduler
         """
-        self._envLogger.debug('Stopping scheduler. State: %s', self.envSchedulerState)
-        if self.envSchedulerState == SchedState.RUNNING:
-            self.envSchedulerState = SchedState.PAUSED
+        self._envLogger.debug('Stopping scheduler. State: %s', self._envSchedulerState)
+        if self._envSchedulerState == SchedState.RUNNING:
+            self._envSchedulerState = SchedState.PAUSED
             self._envLogger.info('Pausing scheduler.')
             self._envScheduler.enter(delay=0, priority=SchedPriorityTable.SCHED_STOP, action=self.__stop_scheduler())
 
@@ -173,9 +173,9 @@ class Environment:
         Args:
             params: Scheduler's Event to be added
         """
-        if self.envSchedulerState in [SchedState.STOPPED, SchedState.PAUSED]:
+        if self._envSchedulerState in [SchedState.STOPPED, SchedState.PAUSED]:
             self._eventsOutOfQueue.append(params)
-        elif self.envSchedulerState in [SchedState.UNSET, SchedState.RUNNING]:
+        elif self._envSchedulerState in [SchedState.UNSET, SchedState.RUNNING]:
             self._envScheduler.enter(**params)
         else:
             pass
@@ -186,7 +186,7 @@ class Environment:
         Stops all watering tasks and empties scheduler. All tasks are
         awaiting for resuming scheduler.
         """
-        self._envLogger.info('Stopping scheduler. State: %s', self.envSchedulerState)
+        self._envLogger.info('Stopping scheduler. State: %s', self._envSchedulerState)
         for event in self._envScheduler.queue:
             if event.action == Plant.water_off:
                 self._envLogger.info('Calling Plant.water_off forced')
@@ -194,7 +194,7 @@ class Environment:
             else:
                 self._eventsOutOfQueue.append(event)
             self._envScheduler.cancel(event)
-        self.envSchedulerState = SchedState.STOPPED
+        self._envSchedulerState = SchedState.STOPPED
 
     def __kill_scheduler(self) -> None:
         """Forces scheduler to stop
@@ -202,8 +202,8 @@ class Environment:
         Stops all watering tasks and empties scheduler. Can't be resumed
         after that
         """
-        self._envLogger.debug('Killing scheduler. State: %s', self.envSchedulerState)
-        self.envSchedulerState = SchedState.KILLED
+        self._envLogger.debug('Killing scheduler. State: %s', self._envSchedulerState)
+        self._envSchedulerState = SchedState.KILLED
         for event in self._envScheduler.queue:
             if event.action == Plant.water_off:
                 event.action()
@@ -215,13 +215,13 @@ class Environment:
 
         Resumes scheduler if stopped. Otherwise does nothing.
         """
-        self._envLogger.debug('Resuming scheduler. State: %s', self.envSchedulerState)
-        if self.envSchedulerState == SchedState.STOPPED:
+        self._envLogger.debug('Resuming scheduler. State: %s', self._envSchedulerState)
+        if self._envSchedulerState == SchedState.STOPPED:
             for event in self._eventsOutOfQueue:
                 self._envScheduler.enter(**event)
 
             self._eventsOutOfQueue.clear()
-            self.envSchedulerState = SchedState.RUNNING
+            self._envSchedulerState = SchedState.RUNNING
             self._envScheduler.run()
             self._envLogger.info('Scheduler resumed')
         else:
@@ -238,13 +238,13 @@ class Environment:
         config = ConfigParser()
         self._envLogger.debug('Updating config section %s %s %s', section_name, option, val)
 
-        if not config.read(filenames=self.cfg_path):
+        if not config.read(filenames=self.__cfg_path):
             self._envLogger.error('Environment config file not found')
             raise FileNotFoundError('Environment config file not found')
 
         config[section_name][option] = str(val)
         try:
-            cfg_file = open(file=self.cfg_path, mode='w')
+            cfg_file = open(file=self.__cfg_path, mode='w')
             config.write(fp=cfg_file)
             cfg_file.close()
         except IOError:
