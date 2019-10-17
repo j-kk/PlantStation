@@ -2,7 +2,7 @@ import signal
 import daemon
 import lockfile
 import logging
-from PlantStation.main import setup_env, run_env, stop_env
+from main import setup_env, run_env, stop_env
 
 CONFIG_PATH = 'enviroment.cfg'
 LOGFILE_PATH = '/var/log/plantstation.log'

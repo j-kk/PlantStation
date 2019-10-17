@@ -4,9 +4,9 @@ from datetime import timedelta, datetime
 from sched import scheduler
 from typing import Callable
 
-from PlantStation.Plant import Plant
-from PlantStation.helpers import format_validators
-from PlantStation.helpers.sched_states import SchedState, SchedPriorityTable
+from Plant import Plant
+from helpers import format_validators
+from helpers.sched_states import SchedState, SchedPriorityTable
 
 CONFIGFILE_DEFAULT_PATH = 'environment.cfg'
 

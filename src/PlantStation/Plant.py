@@ -2,8 +2,8 @@ import logging
 import datetime
 from datetime import timedelta, datetime
 from gpiozero import DigitalOutputDevice, GPIOZeroError
-from PlantStation.helpers.sched_states import SchedPriorityTable
-from PlantStation.helpers.format_validators import is_gpio
+from helpers.sched_states import SchedPriorityTable
+from helpers.format_validators import is_gpio
 
 DEFAULT_INTERVAL = timedelta(seconds=300)
 
