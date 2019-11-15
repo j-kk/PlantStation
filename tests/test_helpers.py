@@ -1,7 +1,8 @@
 import pytest
 import datetime
 from random import Random
-from src.PlantStation.helpers.format_validators import parse_time, is_gpio
+from .context import PlantStation
+
 
 __author__ = "Jakub"
 __copyright__ = "Jakub"

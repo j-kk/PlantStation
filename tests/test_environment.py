@@ -1,8 +1,8 @@
 import pytest
-from PlantStation.Environment import Environment
+from .context import PlantStation
 
 
-def _create_Env() -> Environment:
+def _create_Env() -> PlantStation.Environment:
     pass
 
 

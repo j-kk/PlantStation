@@ -11,8 +11,8 @@ class SchedPriorityTable(Enum):
 
 class SchedState(Enum):
     """Allowed scheduler states"""
-    RUNNING = ()
-    PAUSED = ()
-    STOPPED = ()
-    KILLED = ()
-    UNSET = ()
+    RUNNING = auto()
+    PAUSED = auto()
+    STOPPED =auto()
+    KILLED = auto()
+    UNSET = auto()

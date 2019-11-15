@@ -4,7 +4,7 @@ from random import Random
 
 import pytest
 
-from PlantStation.Plant import Plant
+from .context import PlantStation.Plant
 
 
 def _random_string(stringLength=10):
