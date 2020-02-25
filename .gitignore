@@ -46,3 +46,5 @@ MANIFEST
 
 venv/
 tests/__pycache__/
+
+env/

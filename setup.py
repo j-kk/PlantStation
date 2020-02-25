@@ -2,10 +2,13 @@
 
 import io
 import os
+import shutil
+import subprocess
 import sys
 from shutil import rmtree
 
 from setuptools import find_packages, setup, Command
+from setuptools.command.install import install
 
 # Package meta-data.
 NAME = 'PlantStation'
@@ -23,25 +26,10 @@ with open('LICENSE') as f:
     license = f.read()
 
 
-REQUIRED = ["gpiozero>=1.5.1", "lockfile>=0.12.2", "python-daemon>=2.2.3", "python-dateutil>=2.8.0", "pytest"]
+REQUIRED = ["gpiozero>=1.5.1", "lockfile>=0.12.2", "python-daemon>=2.2.3", "python-dateutil>=2.8.0", "pytest", "daemon"]
 
 EXTRAS = {}
-#
-# setup(
-#     name=NAME,
-#     version=VERSION,
-#     author=AUTHOR,
-#     author_email=EMAIL,
-#     description=DESCRIPTION,
-#     long_description=readme,
-#     long_description_content_type="text/markdown",
-#     url=URL,
-#     packages=find_packages(exclude=('tests', 'docs')),
-#     install_requires=requirements,
-#     classifiers=[
 
-#     ],
-# )
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -100,9 +88,32 @@ class UploadCommand(Command):
         sys.exit()
 
 
+class InstallDaemon(install):
+
+    def run(self):
+        install.run(self)
+        current_dir_path = os.path.dirname(os.path.realpath(__file__))
+        #copy /etc/env.cfg
+        try:
+            os.mkdir('/etc/plantstation')
+        except FileExistsError:
+            pass
+        shutil.copyfile(os.path.join(current_dir_path, 'environment.cfg'), '/etc/plantstation/enviroment.cfg')
+        #create log file
+        subprocess.run(['touch', '/var/log/plantstation.log'], check=True, text=True)
+        subprocess.run(['chown', 'root:root', '/var/log/plantstation.log'], check=True, text=True)
+        #place service file
+        shutil.copyfile(os.path.join(current_dir_path, 'PlantStation.service'),
+                        '/lib/systemd/system/PlantStation.service')
+        subprocess.run(['chown', 'root:root', '/lib/systemd/system/PlantStation.service'], check=True, text=True)
+        subprocess.run(['systemctl', 'daemon-reload'], check=True, text=True)
+        # subprocess.run(['systemctl', 'enable', 'PlantStation.service'], check=True, text=True)
+
+
 # Where the magic happens:
 setup(
     name=NAME,
+    scripts=['PlantStation/PlantStation'],
     version=about['__version__'],
     description=DESCRIPTION,
     long_description=long_description,
@@ -136,5 +147,7 @@ setup(
     # $ setup.py publish support.
     cmdclass={
         'upload': UploadCommand,
+        'install': InstallDaemon
     },
 )
+

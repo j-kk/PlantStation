@@ -1,11 +1,10 @@
 import logging
 from configparser import ConfigParser
-from datetime import timedelta, datetime
 from sched import scheduler
 from typing import Callable
-from .Plant import Plant
-from .helpers import format_validators
-from .helpers.sched_states import SchedState, SchedPriorityTable
+from PlantStation.Plant import Plant
+from PlantStation.helpers.format_validators import *
+from PlantStation.helpers.sched_states import SchedState, SchedPriorityTable
 
 
 class Environment:
@@ -38,27 +37,29 @@ class Environment:
     name: str
     _cfg_path: str
     _plants: [Plant] = []
-    _envScheduler = scheduler()  # TODO create class - advanced scheduler
+    _envScheduler = scheduler()
     _envSchedulerState = SchedState.UNSET
     _eventsOutOfQueue = []
     _envLogger: logging.Logger
+    _dry_run: bool
 
-    def __init__(self, cfg_path: str, name: str = "main"):
+    def __init__(self, config_path: str, env_name: str = "main", dry_run: bool = False):
         """
         Args:
-            name (str): Plant name
+            name (str): Env name
         """
-        self._cfg_path = cfg_path
+        self._cfg_path = config_path
+        self._dry_run = dry_run
+        self.name = env_name
+        self._envLogger = logging.getLogger(__package__ + "." + self.name)
 
-        self.name = name
-        self._envLogger = logging.getLogger(__package__ + "." + name)
-        self._envLogger.info(f'Created {name} environment')
+        self._envLogger.info(f'Created {self.name} environment')
         self._read_config()
 
     def _read_config(self):
         """Reads environment config file
 
-        Reads config file from location defined by self._cfg_path
+        Reads config file from location defined by self.cfg_path
         and if provided data are correct, creates Plants with provided data
         """
         config = ConfigParser()
@@ -74,7 +75,7 @@ class Environment:
         # Left for future - to be implemented
         # global_config_section = config['GLOBAL']
 
-        # read _plants
+        # read_plants
         for section in config:
             if section == 'DEFAULT':
                 continue
@@ -83,16 +84,15 @@ class Environment:
                 try:
                     params = {
                         'plant_name': str(section),
-                        'watering_duration': timedelta(seconds=int(config[section]['wateringDuration'])),
-                        'watering_interval': format_validators.parse_time(time_str=config[section]['wateringInterval']),
+                        'watering_duration': datetime.timedelta(seconds=int(config[section]['wateringDuration'])),
+                        'watering_interval': parse_time(time_str=config[section]['wateringInterval']),
                         'gpio_pin_number': str(config[section]['gpioPinNumber'])}
                     if config[section]['lastTimeWatered'] != '':
                         time_str = config[section]['lastTimeWatered']
-                        params['last_time_watered'] = datetime.strptime(time_str, '%Y-%m-%d %X')
+                        params['last_time_watered'] = datetime.datetime.strptime(time_str, '%Y-%m-%d %X')
                     else:
-                        params['last_time_watered'] = datetime.min
-                    new_plant = Plant(
-                        **params, env_name=self.name, dry_run=True)  # todo
+                        params['last_time_watered'] = datetime.datetime.min
+                    new_plant = Plant(**params, env_name=self.name, dry_run=self._dry_run)
                     self._envLogger.info(
                         f'Found new plant: {params["plant_name"]}, pin: {params["gpio_pin_number"]}')
                     self._plants.append(new_plant)
@@ -149,7 +149,7 @@ class Environment:
                 priority=SchedPriorityTable.SCHED_STOP,
                 action=self._stop_scheduler())
 
-    def _handle_sched_action(self, func: Callable[[any], any]) -> {}:
+    def _handle_sched_action(self, func: Callable[[any], any]) -> {}: #todo decorator
         """Wrapper for all actions in scheduler
 
         Handles all functions in scheduler to give them access to modify
@@ -236,9 +236,7 @@ class Environment:
 
         Resumes scheduler if stopped. Otherwise does nothing.
         """
-        self._envLogger.debug(
-            'Resuming scheduler. State: %s',
-            self._envSchedulerState)
+        self._envLogger.debug('Resuming scheduler. State: %s', self._envSchedulerState)
         if self._envSchedulerState == SchedState.STOPPED:
             for event in self._eventsOutOfQueue:
                 self._envScheduler.enter(**event)

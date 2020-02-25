@@ -3,8 +3,7 @@ import datetime
 from random import Random
 
 import pytest
-
-from .context import PlantStation.Plant
+from PlantStation.Plant import Plant
 
 
 def _random_string(stringLength=10):
