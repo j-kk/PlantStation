@@ -2,3 +2,4 @@ include README.md
 include PlantStation.service
 include LICENSE
 include VERSION
+include example_env.cfg

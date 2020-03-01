@@ -3,6 +3,7 @@ import datetime
 from datetime import timedelta, datetime
 from gpiozero import DigitalOutputDevice, GPIOZeroError
 from gpiozero.pins.mock import MockFactory
+from gpiozero.pins.native import NativeFactory
 from PlantStation.helpers.sched_states import SchedPriorityTable
 from PlantStation.helpers.format_validators import is_gpio
 
@@ -71,9 +72,9 @@ class Plant:
         self._dryRun = dry_run
         try:
             if dry_run:
-                self._pumpSwitch = DigitalOutputDevice(gpio_pin_number, active_high=False, initial_value=True, pin_factory=MockFactory())
+                self._pumpSwitch = DigitalOutputDevice(gpio_pin_number, active_high=False, pin_factory=MockFactory())
             else:
-                self._pumpSwitch = DigitalOutputDevice(gpio_pin_number, active_high=False, initial_value=True)
+                self._pumpSwitch = DigitalOutputDevice(gpio_pin_number, active_high=False, pin_factory=NativeFactory())
         except GPIOZeroError as exc:
             self._plantLogger.error("Plant %s: Couldn't set up gpio pin: %s", self.plantName, self._gpioPinNumber)
             raise exc

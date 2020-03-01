@@ -59,7 +59,7 @@ class Environment:
     def _read_config(self):
         """Reads environment config file
 
-        Reads config file from location defined by self.cfg_path
+        Reads config file from location defined by self._cfg_path
         and if provided data are correct, creates Plants with provided data
         """
         config = ConfigParser()

@@ -8,7 +8,7 @@ from PlantStation.Configure import GLOBAL_CFG_PATH, USER_CFG_PATH, ConstructConf
 parser = argparse.ArgumentParser(description='Plantstation daemon')
 parser.add_argument('-s', '--standalone', default=False, action='store_true',
                     help='Run standalone [path]')
-parser.add_argument('-p', '--config-path', default=GLOBAL_CFG_PATH, action='store', help='Path to config file')
+parser.add_argument('-p', '--config-path', action='store', help='Path to config file')
 parser.add_argument('-d', '--debug', default=False, action='store_true', help='Print extra debug information')
 parser.add_argument('--dry-run', default=False, action='store_true', help='Do not work on pins, dry run only')
 
@@ -29,7 +29,9 @@ def run():
     else:
         logger.setLevel(logging.INFO)
 
-    if args.config_path:
+    logger.debug(f'Path: {args.config_path}')
+
+    if args.config_path != None:
         if os.path.isfile(args.config_path):
             config_path = args.config_path
         else:
@@ -42,10 +44,12 @@ def run():
     else:
         logger.info(f'Config not given in path. Checking user location.')
         configurer = ConstructConfig(mock=args.dry_run)
-        configurer.setup()
-        args.config_path = configurer.cfg_path
-        logger.debug(f'Created config at{configurer.cfg_path}')
-    logger.info(f'Found config:{config_path}')
+        config_path = configurer.setup()
+        if config_path == None:
+            logger.error(f'Failed to create config file')
+            return
+        logger.debug(f'Created config at {config_path}')
+    logger.info(f'Found config: {config_path}')
 
     try:
         if args.standalone:
