@@ -39,7 +39,7 @@ class Plant:
     _pumpSwitch: DigitalOutputDevice
     _plantLogger: logging.Logger
     _dryRun: bool
-    _DEFAULT_INTERVAL: timedelta
+    DEFAULT_INTERVAL: timedelta = DEFAULT_INTERVAL
 
     def __init__(self, plant_name: str, env_name: str, gpio_pin_number: str, watering_duration: timedelta,
                  watering_interval: timedelta, last_time_watered: datetime = datetime.min,
@@ -155,7 +155,7 @@ class Plant:
             self._plantLogger.info("%s: Give me some time, water me later", self.plantName)
             params = {
                 'sched_params': {
-                    'delay': datetime.now() - (self._lastTimeWatered + self._wateringInterval),
+                    'delay': ((self._lastTimeWatered + self._wateringInterval) - datetime.now()).total_seconds(),
                     'priority': SchedPriorityTable.should_water,
                     'action': self.should_water
                 }

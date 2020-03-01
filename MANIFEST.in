@@ -1,0 +1,4 @@
+include README.md
+include PlantStation.service
+include LICENSE
+include VERSION

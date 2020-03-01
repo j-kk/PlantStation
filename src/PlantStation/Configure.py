@@ -1,17 +1,18 @@
 import os
 
-from PlantStation import Plant
+from PlantStation.Plant import Plant
 from PlantStation.helpers.format_validators import parse_time
 from gpiozero import DigitalOutputDevice, GPIOZeroError, Device
 from gpiozero.pins.mock import MockFactory
 from PyInquirer import prompt
-from datetime import timedelta
 import configparser
 
 import logging
 
 PI_GPIO = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
-GLOBAL_CFG_PATH = '/etc/plantstation/env.cfg'
+WORKDIR='/etc/plantstation'
+GLOBAL_CFG_PATH = '/etc/plantstation.cfg'
+USER_CFG_PATH = '~/.config/plantstation.cfg'
 LOGFILE_PATH='/var/log/plantstation.log'
 
 class ConstructConfig():
@@ -33,7 +34,7 @@ class ConstructConfig():
                 'type': 'list',
                 'message': 'Choose configuration location:',
                 'name': 'cfg_location',
-                'choices': ['Current location', 'System location', 'Specify']
+                'choices': ['Default user location (recommended)','Default system location', 'Current location',  'Specify']
             }
         ]
         answers = prompt(questions)
@@ -60,6 +61,8 @@ class ConstructConfig():
             self.cfg_path = answers['cfg_path']
         elif answers['cfg_location'] == 'System location':
             self.cfg_path = GLOBAL_CFG_PATH
+        elif answers['Default user location (recommended)']:
+            self.cfg_path = USER_CFG_PATH
         else:
             self.cfg_path = os.getcwd() + '/' + self._env_name + '.cfg'
 

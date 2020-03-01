@@ -117,6 +117,7 @@ class Environment:
             self._handle_sched_action(plant.should_water)
         self._envLogger.debug('Scheduler state : STOPPED')
         self._envSchedulerState = SchedState.STOPPED
+        self._envLogger.debug(f'Scheduled monitoring - OK')
 
     def start(self) -> None:
         """Starts to look after plants
@@ -176,6 +177,7 @@ class Environment:
                     params['sched_params']['action']]
                 params['sched_params']['action'] = self._handle_sched_action
                 self._add_to_scheduler(params['sched_params'])
+                self._envLogger.debug(f'''Added new event to logger: {params['sched_params']}''')
 
         except Exception as err:
             self._envLogger.critical(
@@ -243,8 +245,11 @@ class Environment:
 
             self._eventsOutOfQueue.clear()
             self._envSchedulerState = SchedState.RUNNING
-            self._envScheduler.run()
-            self._envLogger.info('Scheduler resumed')
+            try:
+                self._envScheduler.run()
+            except TypeError or KeyboardInterrupt:
+                self._envLogger.info(f'SIGINT received. Quitting!')
+
         else:
             self._envLogger.warning('Scheduler is not paused. Can\'t resume')
 
