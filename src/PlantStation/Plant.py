@@ -1,10 +1,12 @@
-import logging
 import datetime
+import logging
 from datetime import timedelta, datetime
+
 from gpiozero import DigitalOutputDevice, GPIOZeroError
 from gpiozero.pins import mock, native
-from PlantStation.helpers.sched_states import SchedPriorityTable
+
 from PlantStation.helpers.format_validators import is_gpio
+from PlantStation.helpers.sched_states import SchedPriorityTable
 
 DEFAULT_INTERVAL = timedelta(seconds=300)
 

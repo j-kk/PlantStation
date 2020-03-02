@@ -6,8 +6,9 @@ import sys
 
 import daemon
 import lockfile
+
+from PlantStation.Configure import GLOBAL_CFG_PATH, LOGFILE_PATH, WORKDIR, USER_CFG_PATH
 from PlantStation.Environment import Environment
-from PlantStation.Configure import GLOBAL_CFG_PATH, LOGFILE_PATH, WORKDIR, USER_CFG_PATH, ConfigCreator
 
 
 class App(object):
@@ -66,9 +67,7 @@ class StandaloneApp(App):
                 sys.exit(1)
 
 
-
 def run():
-
     parser = argparse.ArgumentParser(description='Plantstation daemon')
     parser.add_argument('-s', '--standalone', default=False, action='store_true',
                         help='Run standalone [path]')
@@ -94,7 +93,7 @@ def run():
 
     logger.debug(f'Path: {args.config_path}')
 
-    if args.config_path != None:
+    if args.config_path is not None:
         if os.path.isfile(args.config_path):
             config_path = args.config_path
         else:

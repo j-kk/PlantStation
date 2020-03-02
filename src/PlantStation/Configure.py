@@ -4,8 +4,8 @@ import getpass
 import logging
 import subprocess
 import sys
-
 from pathlib import Path
+
 from PyInquirer import prompt
 from gpiozero import DigitalOutputDevice, GPIOZeroError, Device
 from gpiozero.pins.mock import MockFactory
@@ -14,14 +14,18 @@ from gpiozero.pins.native import NativeFactory
 from PlantStation.Plant import Plant
 from PlantStation.helpers.format_validators import parse_time
 
-PI_GPIO = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]
+PI_GPIO = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]  # TODO
 WORKDIR = Path('/etc/plantstation')
 GLOBAL_CFG_PATH = Path('/etc/')
 USER_CFG_PATH = Path('~/.config/').expanduser()
 CFG_FILENAME = Path('plantstation.cfg')
 LOGFILE_PATH = Path('/var/log/plantstation.log')
 
-class Config():
+
+class Config:
+    """
+        Specification of configuration with multiple saving destinations
+    """
     _cfg_paths: [Path]
     _cfg_parser = configparser.ConfigParser()
     _logger = logging.getLogger(__package__ + '.config')
@@ -40,10 +44,15 @@ class Config():
             else:
                 self._write_to_file()
         except PermissionError as exc:
-            self._logger.error(f'Couldn\'t create file in given directory. No permissions to create file in {self._cfg_paths}')
+            self._logger.error(
+                f'Couldn\'t create file in given directory. No permissions to create file in {self._cfg_paths}')
             raise exc
 
+
 class EnvironmentConfig(Config):
+    """
+        Specification of environment file configuration creation
+    """
     _env_name: str
     _dry_run: bool = False
     _logger: logging
@@ -105,7 +114,7 @@ class EnvironmentConfig(Config):
             ]
             answer = prompt(confirm)
             device.off()
-            return answer['working']  # TODO double declaration of pin
+            return answer['working']
         except GPIOZeroError as exc:
             self._logger.error(f'Couldn\'t set up gpio pin: {pin_number}')
             raise exc
@@ -151,8 +160,12 @@ class EnvironmentConfig(Config):
         else:
             self._cfg_path = [local_path]
 
-
     def setup(self):
+        """
+            Asks user for data about environment
+            Iterates over every pin and asks user if anything happens
+            Then saves file to given location
+        """
         self._general_data()
 
         for pin_number in PI_GPIO:
@@ -169,7 +182,9 @@ class EnvironmentConfig(Config):
 
 
 class ServiceCreator(Config):
-
+    """
+        Creates service file
+    """
     def __init__(self, service_path: Path):
         self._cfg_paths = [service_path]
         self._cfg_parser['Unit'] = {
@@ -177,7 +192,8 @@ class ServiceCreator(Config):
             'After': 'network.target',
             'StartLimitIntervalSec': 0
         }
-        ScriptPath = subprocess.Popen('which PlantStation', shell=True, stdout=subprocess.PIPE).stdout.read().decode('ascii').replace('\n', '')
+        ScriptPath = subprocess.Popen('which PlantStation', shell=True, stdout=subprocess.PIPE).stdout.read().decode(
+            'ascii').replace('\n', '')
         self._cfg_parser['Service'] = {
             'Type': 'simple',
             'Restart': 'always',
@@ -189,7 +205,6 @@ class ServiceCreator(Config):
             'WantedBy': 'multi-user.target'
         }
         self._write_to_file()
-
 
 
 class Configurer():
@@ -216,7 +231,8 @@ class Configurer():
     def config(self):
         parser = argparse.ArgumentParser(description='Create new environment configuration file')
         # parser.add_argument('-d', '--debug', default=False, action='store_true', help='Print extra debug information')
-        parser.add_argument('-m', '--mock', default=False, action='store_true', help='Do not perform operations on pins. (Mock pins)')
+        parser.add_argument('-m', '--mock', default=False, action='store_true',
+                            help='Do not perform operations on pins. (Mock pins)')
         parser.add_argument('-h', '--help', default=False, action='store_true', help='Print extra help')
 
         args = parser.parse_args(sys.argv[2:])
@@ -229,7 +245,7 @@ class Configurer():
         mock = vars(args)['mock']
 
         try:
-            creator = EnvironmentConfig(mock= mock)
+            creator = EnvironmentConfig(mock=mock)
             config_path = creator.setup()
             print(f'Created config in {config_path}')
         except Exception:
@@ -257,7 +273,7 @@ class Configurer():
         else:
             destination_path = Path('~/.config/systemd/user/').expanduser()
 
-        debug = vars(args)['debug']
+        # debug = vars(args)['debug']
 
         try:
             ServiceCreator(service_path=destination_path)

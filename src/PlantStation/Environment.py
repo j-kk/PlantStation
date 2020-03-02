@@ -2,6 +2,7 @@ import logging
 from configparser import ConfigParser
 from sched import scheduler
 from typing import Callable
+
 from PlantStation.Plant import Plant
 from PlantStation.helpers.format_validators import *
 from PlantStation.helpers.sched_states import SchedState, SchedPriorityTable
@@ -150,7 +151,7 @@ class Environment:
                 priority=SchedPriorityTable.SCHED_STOP,
                 action=self._stop_scheduler())
 
-    def _handle_sched_action(self, func: Callable[[any], any]) -> {}: #todo decorator
+    def _handle_sched_action(self, func: Callable[[any], any]) -> {}:  # todo decorator
         """Wrapper for all actions in scheduler
 
         Handles all functions in scheduler to give them access to modify
