@@ -25,6 +25,7 @@ LOGFILE_PATH = Path('/var/log/plantstation.log')
 class Config:
     """
         Specification of configuration with multiple saving destinations
+        On write tries to save to first path in list. If it fails - tries next
     """
     _cfg_paths: [Path]
     _cfg_parser = configparser.ConfigParser()
@@ -218,7 +219,6 @@ class Configurer():
            service    Create service file to allow run daemon as systemd service
         ''')
         parser.add_argument('command', help='Subcommand to run')
-        parser.add_argument('-h', '--help', default='False', action='store_true', help='Print extra help')
 
         args = parser.parse_args(sys.argv[1:2])
         if not hasattr(self, args.command):
@@ -233,13 +233,8 @@ class Configurer():
         # parser.add_argument('-d', '--debug', default=False, action='store_true', help='Print extra debug information')
         parser.add_argument('-m', '--mock', default=False, action='store_true',
                             help='Do not perform operations on pins. (Mock pins)')
-        parser.add_argument('-h', '--help', default=False, action='store_true', help='Print extra help')
 
         args = parser.parse_args(sys.argv[2:])
-
-        if vars(args)['help']:
-            parser.print_help()
-            return
 
         # debug = vars(args)['debug']
         mock = vars(args)['mock']
@@ -257,15 +252,10 @@ class Configurer():
         # parser.add_argument('-d', '--debug', default=False, action='store_true', help='Print extra debug information')
         parser.add_argument('-g', '--global', default=False, action='store_true',
                             help='Perform operation on global directories (requires sudo)')
-        parser.add_argument('-h', '--help', default='False', action='store_true', help='Print extra help')
 
         args = parser.parse_args(sys.argv[2:])
 
         destination_path: Path
-
-        if vars(args)['help']:
-            parser.print_help()
-            return
 
         destination_path: Path
         if vars(args)['global']:

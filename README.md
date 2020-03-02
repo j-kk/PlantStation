@@ -21,4 +21,5 @@ The PlantSetup has two commands:
 
 ###Running the PlantStation daemon
 The PlantStation daemon keeps after each plant described in environment configuration file.
-This file is required to perform any action
+This file is required to perform any action.
+PlantStation may run either in standalone (-s) or supervised mode.
