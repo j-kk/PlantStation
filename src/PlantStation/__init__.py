@@ -2,9 +2,7 @@
 """
 Top-level package for PlantStation project.
 """
-import PlantStation.version
-
 
 __author__ = """Jakub Kowalski"""
-__version__ = str(PlantStation.version.version)
+__version__ = '0.1.0'
 

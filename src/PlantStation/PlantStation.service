@@ -2,6 +2,7 @@
 Description=PlantStation service
 After=network.target
 StartLimitIntervalSec=0
+
 [Service]
 Type=simple
 Restart=always
