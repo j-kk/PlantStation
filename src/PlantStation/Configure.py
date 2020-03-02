@@ -267,5 +267,5 @@ class Configurer():
             sys.exit(1)
 
 
-if __name__ == '__main__':
+def run():
     Configurer()
