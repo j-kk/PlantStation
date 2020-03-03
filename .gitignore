@@ -48,3 +48,5 @@ venv/
 tests/__pycache__/
 
 env/
+
+scrap/

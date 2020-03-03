@@ -71,7 +71,7 @@ def run():
     parser = argparse.ArgumentParser(description='Plantstation daemon')
     parser.add_argument('-s', '--standalone', default=False, action='store_true',
                         help='Run standalone [path]')
-    parser.add_argument('-p', '--config-path', action='store', help='Path to config file')
+    parser.add_argument('-p', '--config-path', action='store', nargs=1, help='Path to config file')
     parser.add_argument('-d', '--debug', default=False, action='store_true', help='Print extra debug information')
     parser.add_argument('--dry-run', default=False, action='store_true', help='Do not work on pins, dry run only')
 

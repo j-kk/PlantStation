@@ -29,7 +29,7 @@ class Config:
     """
     _cfg_paths: [Path]
     _cfg_parser = configparser.ConfigParser()
-    _logger = logging.getLogger(__package__ + '.config')
+    _logger = logging.getLogger('PlantSetup')
 
     def _write_to_file(self):
         try:
@@ -38,6 +38,10 @@ class Config:
             self._logger.info(f'Created config file in {self._cfg_paths}')
             return self._cfg_paths
         except FileNotFoundError or IsADirectoryError as exc:
+
+            if not self._cfg_paths[0].parent.is_dir():
+                self._cfg_paths[0].parent.mkdir(parents=True)
+
             self._logger.warning(f'Couldn\'t create file in given directory. Creating in current directory')
             self._cfg_paths = self._cfg_paths[1:]
             if len(self._cfg_paths) == 0:
@@ -56,10 +60,8 @@ class EnvironmentConfig(Config):
     """
     _env_name: str
     _dry_run: bool = False
-    _logger: logging
 
     def __init__(self, mock=False):  # TODO logs
-        self._logger = logging.getLogger(__package__ + '.configurer')
         if mock:
             Device.pin_factory = MockFactory()
             self._dry_run = True
@@ -153,13 +155,13 @@ class EnvironmentConfig(Config):
                 }
             ]
             answers = prompt(questions)
-            self._cfg_path = [answers['cfg_path'], local_path]
+            self._cfg_paths = [answers['cfg_path'].joinpath(Path(self._env_name + '.cfg')), local_path]
         elif answers['cfg_location'] == 'System location':
-            self._cfg_path = [GLOBAL_CFG_PATH, local_path]
+            self._cfg_paths = [GLOBAL_CFG_PATH.joinpath(Path(self._env_name + '.cfg')), local_path]
         elif answers['cfg_location'] == 'Default user location (recommended)':
-            self._cfg_path = [USER_CFG_PATH, local_path]
+            self._cfg_paths = [USER_CFG_PATH.joinpath(Path(self._env_name + '.cfg')), local_path]
         else:
-            self._cfg_path = [local_path]
+            self._cfg_paths = [local_path]
 
     def setup(self):
         """
@@ -173,20 +175,15 @@ class EnvironmentConfig(Config):
             if self._check_pin(pin_number):
                 self._create_plant(pin_number)
 
-        if not self._cfg_path[0].is_dir():
-            self._cfg_path[0].mkdir(parents=True)
-
-        self._cfg_path += CFG_FILENAME
-
-        self._write_to_file()
-        return self._cfg_path
+        return self._write_to_file()
 
 
 class ServiceCreator(Config):
     """
         Creates service file
     """
-    def __init__(self, service_path: Path):
+
+    def __init__(self, service_path: Path, path_to_config: Path):
         self._cfg_paths = [service_path]
         self._cfg_parser['Unit'] = {
             'Description': 'PlantStation service',
@@ -195,12 +192,13 @@ class ServiceCreator(Config):
         }
         ScriptPath = subprocess.Popen('which PlantStation', shell=True, stdout=subprocess.PIPE).stdout.read().decode(
             'ascii').replace('\n', '')
+        ExecStart = ScriptPath + ' -p ' + str(path_to_config)
         self._cfg_parser['Service'] = {
             'Type': 'simple',
             'Restart': 'always',
             'RestartSec': '3',
             'User': getpass.getuser(),
-            'ExecStart': ScriptPath
+            'ExecStart': ExecStart
         }
         self._cfg_parser['Install'] = {
             'WantedBy': 'multi-user.target'
@@ -212,7 +210,7 @@ class Configurer():
     def __init__(self):
         parser = argparse.ArgumentParser(
             description='PlantStation configurator',
-            usage='''git <command> [<args>]
+            usage='''PlantSetup cmd [<args>]
         
         Available commands
            config     Create environment config file 
@@ -266,7 +264,7 @@ class Configurer():
         # debug = vars(args)['debug']
 
         try:
-            ServiceCreator(service_path=destination_path)
+            ServiceCreator(service_path=destination_path, path_to_config=Path(args.environment_path).absolute())
             print(f'Created service')
         except Exception:
             print(f'Couldn\'t create service files. Quitting!')
@@ -275,3 +273,7 @@ class Configurer():
 
 def run():
     Configurer()
+
+
+if __name__ == '__main__':
+    run()
