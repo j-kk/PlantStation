@@ -66,7 +66,7 @@ class Plant:
             raise ValueError('Wrong GPIO value')
 
         self.plantName = plant_name
-        self._lastTimeWatered = last_time_watered
+        self._lastTimeWatered: datetime.datetime = last_time_watered
         self._wateringDuration = watering_duration
         self._wateringInterval = watering_interval
         self._gpioPinNumber = gpio_pin_number
@@ -129,15 +129,15 @@ class Plant:
                 'config_params': {
                     'section_name': self.plantName,
                     'option': 'lastTimeWatered',
-                    'val': self._lastTimeWatered.strftime(fmt='%Y-%m-%d %X')
+                    'val': self._lastTimeWatered.strftime(format='%Y-%m-%d %X')
                 }
             }
             return params
         except GPIOZeroError as exc:
-            self._plantLogger.error("%s: GPIO error", self.plantName)
+            self._plantLogger.error(f'{self.plantName}: GPIO error: {exc}')
             raise exc
         except Exception as exc:
-            self._plantLogger.error("%s: Other error", self.plantName)
+            self._plantLogger.error(f'{self.plantName}: Other error: {exc}')
             raise exc
 
     def should_water(self):

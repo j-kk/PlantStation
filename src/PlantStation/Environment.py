@@ -180,14 +180,14 @@ class Environment:
                 self._add_to_scheduler(params['sched_params'])
                 self._envLogger.debug(f'''Added new event to logger: {params['sched_params']}''')
 
-        except Exception as err:
+        except Exception as exc:
             self._envLogger.critical(
-                'Handler received exception. Killing scheduler.')
+                'Handler received exception. Killing scheduler. {exc}')
             self._envScheduler.enter(
                 delay=0,
                 priority=SchedPriorityTable.SCHED_STOP,
                 action=self._kill_scheduler())
-            raise err
+            raise exc
 
     def _add_to_scheduler(self, event):
         """Adds event to scheduler in controlled way
@@ -248,7 +248,7 @@ class Environment:
             self._envSchedulerState = SchedState.RUNNING
             try:
                 self._envScheduler.run()
-            except TypeError or KeyboardInterrupt:
+            except KeyboardInterrupt:
                 self._envLogger.info(f'SIGINT received. Quitting!')
 
         else:

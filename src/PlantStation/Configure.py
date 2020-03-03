@@ -28,26 +28,30 @@ class Config:
         On write tries to save to first path in list. If it fails - tries next
     """
     _cfg_paths: [Path]
-    _cfg_parser = configparser.ConfigParser()
+    _cfg_parser = configparser.RawConfigParser()
     _logger = logging.getLogger('PlantSetup')
+
+    def __init__(self):
+        self._cfg_parser.optionxform = str
 
     def _write_to_file(self):
         try:
             cfg_file = open(self._cfg_paths[0], 'w')
             self._cfg_parser.write(cfg_file)
             self._logger.info(f'Created config file in {self._cfg_paths}')
-            return self._cfg_paths
+            return self._cfg_paths[0]
         except FileNotFoundError or IsADirectoryError as exc:
 
             if not self._cfg_paths[0].parent.is_dir():
                 self._cfg_paths[0].parent.mkdir(parents=True)
-
-            self._logger.warning(f'Couldn\'t create file in given directory. Creating in current directory')
-            self._cfg_paths = self._cfg_paths[1:]
-            if len(self._cfg_paths) == 0:
-                raise exc
-            else:
                 self._write_to_file()
+            else:
+                self._logger.warning(f'Couldn\'t create file in given directory. Creating in current directory')
+                self._cfg_paths = self._cfg_paths[1:]
+                if len(self._cfg_paths) == 0:
+                    raise exc
+                else:
+                    self._write_to_file()
         except PermissionError as exc:
             self._logger.error(
                 f'Couldn\'t create file in given directory. No permissions to create file in {self._cfg_paths}')
@@ -62,6 +66,7 @@ class EnvironmentConfig(Config):
     _dry_run: bool = False
 
     def __init__(self, mock=False):  # TODO logs
+        super().__init__()
         if mock:
             Device.pin_factory = MockFactory()
             self._dry_run = True
@@ -175,7 +180,7 @@ class EnvironmentConfig(Config):
             if self._check_pin(pin_number):
                 self._create_plant(pin_number)
 
-        return self._write_to_file()
+        return str(self._write_to_file())
 
 
 class ServiceCreator(Config):
@@ -184,9 +189,10 @@ class ServiceCreator(Config):
     """
 
     def __init__(self, service_path: Path, path_to_config: Path):
+        super().__init__()
         self._cfg_paths = [service_path]
         self._cfg_parser['Unit'] = {
-            'Description': 'PlantStation service',
+            'Description': 'PlantStation service',  # TODO subparser
             'After': 'network.target',
             'StartLimitIntervalSec': 0
         }
@@ -228,13 +234,11 @@ class Configurer():
 
     def config(self):
         parser = argparse.ArgumentParser(description='Create new environment configuration file')
-        # parser.add_argument('-d', '--debug', default=False, action='store_true', help='Print extra debug information')
         parser.add_argument('-m', '--mock', default=False, action='store_true',
                             help='Do not perform operations on pins. (Mock pins)')
 
         args = parser.parse_args(sys.argv[2:])
 
-        # debug = vars(args)['debug']
         mock = vars(args)['mock']
 
         try:
@@ -247,13 +251,12 @@ class Configurer():
 
     def service(self):
         parser = argparse.ArgumentParser(description='Create service file for systemd')
-        # parser.add_argument('-d', '--debug', default=False, action='store_true', help='Print extra debug information')
+        parser.add_argument('-p', '--config-path', action='store', nargs=1, required=True, help='Path to config file')
+        parser.add_argument('-d', '--debug', action='store_true', default=False, help='Print extra debug info')
         parser.add_argument('-g', '--global', default=False, action='store_true',
                             help='Perform operation on global directories (requires sudo)')
 
         args = parser.parse_args(sys.argv[2:])
-
-        destination_path: Path
 
         destination_path: Path
         if vars(args)['global']:
@@ -261,13 +264,24 @@ class Configurer():
         else:
             destination_path = Path('~/.config/systemd/user/').expanduser()
 
-        # debug = vars(args)['debug']
+        destination_path = destination_path.joinpath('PlantStation.service')
+
+        configuration_file_path = Path(args.config_path[0]).absolute()
+
+        if not configuration_file_path.is_file():
+            print(f'Config file not found. Quitting!')
+            sys.exit(1)
+        else:
+            print(f'Creating systemd service at {destination_path} with config {configuration_file_path}')
 
         try:
-            ServiceCreator(service_path=destination_path, path_to_config=Path(args.environment_path).absolute())
+            ServiceCreator(service_path=destination_path, path_to_config=configuration_file_path)
             print(f'Created service')
-        except Exception:
-            print(f'Couldn\'t create service files. Quitting!')
+        except Exception as exc:
+            if args.debug:
+                print(f'Couldn\'t create service files. Quitting! {exc}')
+            else:
+                print(f'Couldn\'t create service files. Quitting!')
             sys.exit(1)
 
 
