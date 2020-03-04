@@ -10,7 +10,7 @@ class Config(object):
         On write tries to save to first path in list. If it fails - tries next
     """
     _cfg_paths: [Path]
-    cfg_parser= configparser.RawConfigParser()
+    cfg_parser = configparser.RawConfigParser()
     _cfg_lock = Lock()
     _logger: logging.Logger
 
@@ -23,6 +23,8 @@ class Config(object):
         """
             Reads content from 1st path
         """
+        if not len(self._cfg_paths) > 0:
+            raise FileNotFoundError(f'Error: environment config file not defined. Quitting!')
         if not self.cfg_parser.read(self._cfg_paths[0]):
             self._logger.critical(f'Config file {self._cfg_paths[0]} not found')
             raise FileNotFoundError(f'Error: environment config file not found. Quitting!')
@@ -45,8 +47,7 @@ class Config(object):
             self._logger.info(f'Created config file in {self._cfg_paths}')
             return self._cfg_paths[0]
         except FileNotFoundError or IsADirectoryError as exc:
-
-            if not self._cfg_paths[0].parent.is_dir():
+            if hasattr(self._cfg_paths[0], 'parent') and not self._cfg_paths[0].parent.is_dir():
                 self._cfg_paths[0].parent.mkdir(parents=True)
                 self._write_to_file()
             else:
@@ -60,4 +61,5 @@ class Config(object):
             self._logger.error(
                 f'Couldn\'t create file in given directory. No permissions to create file in {self._cfg_paths}')
             raise exc
-
+        except IndexError as exc:
+            raise FileNotFoundError(f'Error: environment config file not defined. Quitting!')
