@@ -6,7 +6,7 @@ gpio_regex = re.compile(r'((BOARD)|(GPIO))\d{1,2}$')
 datetime_regex = re.compile(r'((?P<days>\d{1,2})D) ((?P<hours>\d{2}):)((?P<minutes>\d{2}):)(?P<seconds>\d{2})$')
 
 
-def parse_time(time_str: str, quiet: bool = False) -> datetime.timedelta or None:
+def parse_time(time_str: str) -> datetime.timedelta or None:
     """Parses time to project's time format
 
     Args:
@@ -17,20 +17,14 @@ def parse_time(time_str: str, quiet: bool = False) -> datetime.timedelta or None
     """
     parts = datetime_regex.match(time_str)
     if not parts:
-        if not quiet:
-            raise ValueError('String does not match proper pattern')
-        else:
-            return None
+        raise ValueError('String does not match proper pattern')
     parts = parts.groupdict()
     time_params = {}
     for (name, param) in parts.items():
         if param:
             time_params[name] = int(param)
         else:
-            if not quiet:
-                raise ValueError('String does not match proper pattern')
-            else:
-                return None
+            raise ValueError('String does not match proper pattern')
     return datetime.timedelta(**time_params)
 
 

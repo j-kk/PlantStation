@@ -24,9 +24,6 @@ class App(object):
     def run_env(self):
         self._mainEnvironment.start()
 
-    def stop_env(self):
-        self._mainEnvironment.stop()
-
     def run(self):
         self.run_env()
 

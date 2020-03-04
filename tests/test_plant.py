@@ -31,12 +31,12 @@ def test_plants(seed: int):
 
     rnd = Random(seed)
     for x in range(10):
-        pp = Plant(plant_name='P' + str(x),
-                   env_name="test",
-                   gpio_pin_number=_generate_GPIO(True),
-                   watering_duration=dt_s * rnd.randint(1, 2),
-                   watering_interval=dt_s * rnd.randint(1, 2),
-                   last_time_watered=datetime.datetime.now() + dt_s * rnd.randint(-1, 0),
+        pp = Plant(plantName='P' + str(x),
+                   envName="test",
+                   gpioPinNumber=_generate_GPIO(True),
+                   wateringDuration=dt_s * rnd.randint(1, 2),
+                   wateringInterval=dt_s * rnd.randint(1, 2),
+                   lastTimeWatered=datetime.datetime.now() + dt_s * rnd.randint(-1, 0),
                    dry_run=True)
         pp.water_on()
 
@@ -47,33 +47,33 @@ def test_invalid_arguments(seed: int):
 
     for x in range(0, 10):
         params = {
-            "plant_name": ("Plant " + str(x)),
-            "env_name": "test",
-            "gpio_pin_number": _generate_GPIO(True),
-            "watering_duration": datetime.timedelta(seconds=rnd.randint(1, 100)),
-            "watering_interval": datetime.timedelta(seconds=rnd.randint(1, 100)),
+            "plantName": ("Plant " + str(x)),
+            "envName": "test",
+            "gpioPinNumber": _generate_GPIO(True),
+            "wateringDuration": datetime.timedelta(seconds=rnd.randint(1, 100)),
+            "wateringInterval": datetime.timedelta(seconds=rnd.randint(1, 100)),
             "dry_run": True
         }
         opt = rnd.randint(0, 3)
         if opt == 0:
-            params["gpio_pin_number"] = _generate_GPIO(False)
+            params["gpioPinNumber"] = _generate_GPIO(False)
         elif opt == 1:
-            params["watering_duration"] = datetime.timedelta(seconds=-rnd.randint(0, 100000))
+            params["wateringDuration"] = datetime.timedelta(seconds=-rnd.randint(0, 100000))
         elif opt == 2:
-            params["watering_interval"] = datetime.timedelta(seconds=-rnd.randint(0, 100000))
+            params["wateringInterval"] = datetime.timedelta(seconds=-rnd.randint(0, 100000))
         else:
-            params["last_time_watered"] = datetime.datetime.now() + datetime.timedelta(seconds=rnd.randint(1, 100))
+            params["lastTimeWatered"] = datetime.datetime.now() + datetime.timedelta(seconds=rnd.randint(1, 100))
 
         with pytest.raises(ValueError):
             Plant(**params)
 
     for x in range(0, 10):
         params = {
-            "plant_name": ("Plant " + str(x)),
-            "env_name": "test",
-            "gpio_pin_number": _generate_GPIO(True),
-            "watering_duration": datetime.timedelta(seconds=rnd.randint(1, 100)),
-            "watering_interval": datetime.timedelta(seconds=rnd.randint(1, 100)),
+            "plantName": ("Plant " + str(x)),
+            "envName": "test",
+            "gpioPinNumber": _generate_GPIO(True),
+            "wateringDuration": datetime.timedelta(seconds=rnd.randint(1, 100)),
+            "wateringInterval": datetime.timedelta(seconds=rnd.randint(1, 100)),
             "dry_run": False
         }
         from gpiozero import GPIOZeroError

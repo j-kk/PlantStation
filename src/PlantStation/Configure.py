@@ -1,5 +1,5 @@
 import argparse
-import configparser
+import datetime
 import getpass
 import logging
 import subprocess
@@ -11,8 +11,11 @@ from gpiozero import DigitalOutputDevice, GPIOZeroError, Device
 from gpiozero.pins.mock import MockFactory
 from gpiozero.pins.native import NativeFactory
 
+
 from PlantStation.Plant import Plant
 from PlantStation.helpers.format_validators import parse_time
+from PlantStation.helpers.config import Config
+from helpers import does_throw
 
 PI_GPIO = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]  # TODO
 WORKDIR = Path('/etc/plantstation')
@@ -20,42 +23,6 @@ GLOBAL_CFG_PATH = Path('/etc/')
 USER_CFG_PATH = Path('~/.config/').expanduser()
 CFG_FILENAME = Path('plantstation.cfg')
 LOGFILE_PATH = Path('/var/log/plantstation.log')
-
-
-class Config:
-    """
-        Specification of configuration with multiple saving destinations
-        On write tries to save to first path in list. If it fails - tries next
-    """
-    _cfg_paths: [Path]
-    _cfg_parser = configparser.RawConfigParser()
-    _logger = logging.getLogger('PlantSetup')
-
-    def __init__(self):
-        self._cfg_parser.optionxform = str
-
-    def _write_to_file(self):
-        try:
-            cfg_file = open(self._cfg_paths[0], 'w')
-            self._cfg_parser.write(cfg_file)
-            self._logger.info(f'Created config file in {self._cfg_paths}')
-            return self._cfg_paths[0]
-        except FileNotFoundError or IsADirectoryError as exc:
-
-            if not self._cfg_paths[0].parent.is_dir():
-                self._cfg_paths[0].parent.mkdir(parents=True)
-                self._write_to_file()
-            else:
-                self._logger.warning(f'Couldn\'t create file in given directory. Creating in current directory')
-                self._cfg_paths = self._cfg_paths[1:]
-                if len(self._cfg_paths) == 0:
-                    raise exc
-                else:
-                    self._write_to_file()
-        except PermissionError as exc:
-            self._logger.error(
-                f'Couldn\'t create file in given directory. No permissions to create file in {self._cfg_paths}')
-            raise exc
 
 
 class EnvironmentConfig(Config):
@@ -66,7 +33,7 @@ class EnvironmentConfig(Config):
     _dry_run: bool = False
 
     def __init__(self, mock=False):  # TODO logs
-        super().__init__()
+        super().__init__(logging.getLogger(__package__))
         if mock:
             Device.pin_factory = MockFactory()
             self._dry_run = True
@@ -79,29 +46,29 @@ class EnvironmentConfig(Config):
             {
                 'type': 'input',
                 'message': 'Enter plant\'s name:',
-                'name': 'plant_name',
-                'validate': lambda name: name not in self._cfg_parser and name != ""
+                'name': 'plantName',
+                'validate': lambda name: name not in self.cfg_parser and name != ""
             },
             {
                 'type': 'input',
                 'message': 'Enter watering duration (in seconds):',
-                'name': 'watering_duration',
+                'name': 'wateringDuration',
                 'validate': lambda t: t.isdigit()
             },
             {
                 'type': 'input',
                 'message': 'Enter interval between waterings (example: 10D 10:10:10):',
-                'name': 'watering_interval',
-                'validate': lambda t: parse_time(t, quiet=True) != None
+                'name': 'wateringInterval',
+                'validate': lambda t: does_throw(parse_time, [t])
             }
         ]
 
         answers = prompt(questions)
 
-        self._cfg_parser[answers['plant_name']] = {
-            'plantName': answers['plant_name'],
-            'wateringDuration': answers['watering_duration'],
-            'wateringInterval': answers['watering_interval'],
+        self.cfg_parser[answers['plantName']] = {
+            'plantName': answers['plantName'],
+            'wateringDuration': answers['wateringDuration'],
+            'wateringInterval': answers['wateringInterval'],
             'lastTimeWatered': '',
             'gpioPinNumber': 'GPIO' + str(pin_number),
             'isActive': 'True'
@@ -132,7 +99,7 @@ class EnvironmentConfig(Config):
             {
                 'type': 'input',
                 'message': 'Enter environment name:',
-                'name': 'env_name',
+                'name': 'envName',
                 'validate': lambda name: name != ''
             },
             {
@@ -141,14 +108,15 @@ class EnvironmentConfig(Config):
                 'name': 'cfg_location',
                 'choices': ['Default user location (recommended)', 'Default system location', 'Current location',
                             'Specify']
+            },
+            {
+                'type': 'confirm',
+                'message': 'Specify working hours? (who wants burping at the midnight?)',
+                'name': 'workingHours',
+                'default': False
             }
         ]
         answers = prompt(questions)
-        self._env_name = answers['env_name']
-        self._cfg_parser['GLOBAL'] = {
-            'ENV_NAME': self._env_name,
-            'DEFAULT_INTERVAL': Plant.DEFAULT_INTERVAL
-        }
         local_path = Path.cwd().joinpath(Path(self._env_name + '.cfg'))
         if answers['cfg_location'] == 'Specify':
             questions = [
@@ -168,6 +136,30 @@ class EnvironmentConfig(Config):
         else:
             self._cfg_paths = [local_path]
 
+        self._env_name = answers['envName']
+        self.cfg_parser['GLOBAL'] = {
+            'env_name': self._env_name,
+            'workingHours': str(answers['workingHours'])
+        }
+        if answers['workingHours']:
+            questions = [
+                {
+                    'type': 'input',
+                    'message': 'Enter begin of the working hours (HH:MM)',
+                    'name': 'workingHoursBegin',
+                    'validate': lambda t: does_throw(datetime.time.fromisoformat, [t])
+                },
+                {
+                    'type': 'input',
+                    'message': 'Enter end of the working hours (HH:MM)',
+                    'name': 'workingHoursEnd',
+                    'validate': lambda t: does_throw(datetime.time.fromisoformat, [t])
+                }
+            ]
+            answers = prompt(questions)
+            self.cfg_parser['GLOBAL']['workingHoursBegin'] = answers['workingHoursBegin']
+            self.cfg_parser['GLOBAL']['workingHoursEnd'] = answers['workingHoursEnd']
+
     def setup(self):
         """
             Asks user for data about environment
@@ -180,7 +172,7 @@ class EnvironmentConfig(Config):
             if self._check_pin(pin_number):
                 self._create_plant(pin_number)
 
-        return str(self._write_to_file())
+        return str(self.write())
 
 
 class ServiceCreator(Config):
@@ -189,9 +181,9 @@ class ServiceCreator(Config):
     """
 
     def __init__(self, service_path: Path, path_to_config: Path):
-        super().__init__()
+        super().__init__(logging.getLogger(__package__))
         self._cfg_paths = [service_path]
-        self._cfg_parser['Unit'] = {
+        self.cfg_parser['Unit'] = {
             'Description': 'PlantStation service',  # TODO subparser
             'After': 'network.target',
             'StartLimitIntervalSec': 0
@@ -199,17 +191,17 @@ class ServiceCreator(Config):
         ScriptPath = subprocess.Popen('which PlantStation', shell=True, stdout=subprocess.PIPE).stdout.read().decode(
             'ascii').replace('\n', '')
         ExecStart = ScriptPath + ' -p ' + str(path_to_config)
-        self._cfg_parser['Service'] = {
+        self.cfg_parser['Service'] = {
             'Type': 'simple',
             'Restart': 'always',
             'RestartSec': '3',
             'User': getpass.getuser(),
             'ExecStart': ExecStart
         }
-        self._cfg_parser['Install'] = {
+        self.cfg_parser['Install'] = {
             'WantedBy': 'multi-user.target'
         }
-        self._write_to_file()
+        self.write()
 
 
 class Configurer():
@@ -254,7 +246,7 @@ class Configurer():
         parser.add_argument('-p', '--config-path', action='store', nargs=1, required=True, help='Path to config file')
         parser.add_argument('-d', '--debug', action='store_true', default=False, help='Print extra debug info')
         parser.add_argument('-g', '--global', default=False, action='store_true',
-                            help='Perform operation on global directories (requires sudo)')
+                            help='Perform priority on global directories (requires sudo)')
 
         args = parser.parse_args(sys.argv[2:])
 
