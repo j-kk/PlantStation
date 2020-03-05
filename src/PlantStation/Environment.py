@@ -4,7 +4,7 @@ from PlantStation.Plant import Plant
 from PlantStation.helpers.format_validators import parse_time
 from PlantStation.helpers.config import Config
 from PlantStation.Tasks import ShouldWaterTask
-from Tasks import TaskPool
+from PlantStation.Tasks import TaskPool
 
 
 class Environment(object):

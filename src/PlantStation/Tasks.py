@@ -3,8 +3,8 @@ import logging
 import sched
 from typing import Callable
 
-from Plant import Plant
-from sched_states import SchedPriorityTable
+from PlantStation.Plant import Plant
+from PlantStation.helpers.sched_states import SchedPriorityTable
 
 
 class TaskPool(object):
