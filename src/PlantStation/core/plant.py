@@ -5,7 +5,7 @@ from datetime import timedelta, datetime
 from gpiozero import DigitalOutputDevice, GPIOZeroError
 
 from .helpers.format_validators import is_gpio
-from core.config import EnvironmentConfig
+from .config import EnvironmentConfig
 
 DEFAULT_INTERVAL = timedelta(seconds=300)
 
