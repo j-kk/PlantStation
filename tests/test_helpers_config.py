@@ -4,7 +4,7 @@ import mock
 import pytest
 from mock import patch
 
-from config import Config
+from core.config import Config
 
 
 @mock.patch("logging.Logger")

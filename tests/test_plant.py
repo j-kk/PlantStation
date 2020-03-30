@@ -3,7 +3,7 @@ import datetime
 from random import Random
 
 import pytest
-from PlantStation.Plant import Plant
+from core.plant import Plant
 
 
 def _random_string(stringLength=10):

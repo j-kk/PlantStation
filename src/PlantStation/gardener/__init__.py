@@ -3,29 +3,8 @@ import logging
 import sys
 from pathlib import Path
 
-from PlantStation.Configure import GLOBAL_CFG_PATH, USER_CFG_PATH
-from PlantStation.Environment import Environment
-
-
-class App(object):
-    _mainEnvironment: Environment
-    _config_path: str
-    _debug: bool
-    _logger = logging.getLogger(__package__)
-
-    def __init__(self, config_path: str, dry_run: bool = False, debug: bool = False):
-        # get config
-        self._config_path = config_path
-        self._debug = debug
-        self._mainEnvironment = Environment(config_path=self._config_path, dry_run=dry_run)
-
-        self._mainEnvironment.schedule_monitoring()
-
-    def run_env(self):
-        self._mainEnvironment.start()
-
-    def run(self):
-        self.run_env()
+from PlantStation.configurer import USER_CFG_PATH, GLOBAL_CFG_PATH
+from .App import App
 
 
 def run():
