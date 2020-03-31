@@ -8,6 +8,7 @@ from PyInquirer import prompt
 from gpiozero import DigitalOutputDevice, GPIOZeroError, Device, pins
 
 from PlantStation.core import Config
+from PlantStation.core.helpers.helpers import does_throw
 from .defaults import *
 
 
