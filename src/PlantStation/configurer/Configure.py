@@ -8,7 +8,7 @@ from PyInquirer import prompt
 from gpiozero import DigitalOutputDevice, GPIOZeroError, Device, pins
 
 from PlantStation.core import Config
-from PlantStation.core.helpers.helpers import does_throw
+from PlantStation.core.helpers import parse_time, does_throw
 from .defaults import *
 
 
@@ -281,3 +281,5 @@ class Configurer():
                 print(f'Couldn\'t create service files. Quitting!')
             sys.exit(1)
 
+if __name__ == '__main__':
+    Configurer()

@@ -6,7 +6,6 @@ from typing import Callable
 
 from PlantStation.core.ext import MultithreadSched
 from PlantStation.core import plant, EnvironmentConfig
-from .helpers import SchedPriorityTable
 
 
 class TaskPool(object):
@@ -30,8 +29,7 @@ class TaskPool(object):
         with self.lock:
             self.logger.debug(f'Adding new task to pool: {task}. Delay: {task.delay.total_seconds()}')
             self._active_tasks.append(task)
-            self._scheduler.enter(delay=task.delay.total_seconds(), priority=task.priority, action=self._run_task,
-                                  argument=[task])
+            self._scheduler.enter(delay=task.delay, action=self._run_task, args=[task])
 
     def start(self) -> None:
         """
@@ -40,6 +38,10 @@ class TaskPool(object):
         try:
             self.logger.debug(f'Starting pool')
             self._scheduler.run()
+        except KeyboardInterrupt as exc:
+            self.logger.info(f'Received SIGING. Turning off scheduler')
+            self._scheduler.stop()
+
         except Exception as exc:
             self.logger.warning(f'Received exception {exc}')
             self.stop()
@@ -52,7 +54,7 @@ class TaskPool(object):
         self.logger.debug(f'Stopping scheduler.')
         # temporary
         for event in self._active_tasks:
-            self._scheduler.cancel(event)
+            # self._scheduler.cancel(event)
             if event.task is not None:
                 event.task.cancel()
 
@@ -89,13 +91,10 @@ class Task(object):
     func: Callable
     delay: datetime.timedelta
     env_config: EnvironmentConfig
-    priority: SchedPriorityTable
     logger: logging.Logger
 
-    def __init__(self, delay: datetime.timedelta, priority: SchedPriorityTable, action: Callable,
-                 env_config: EnvironmentConfig):
+    def __init__(self, delay: datetime.timedelta, action: Callable, env_config: EnvironmentConfig):
         self.func = action
-        self.priority = priority
         self.delay = delay
         self.env_config = env_config
         self.logger = self.env_config.logger.getChild('Task')
@@ -112,8 +111,7 @@ class ShouldWaterTask(Task):
 
     def __init__(self, plant: plant, env_config: EnvironmentConfig, delay=datetime.timedelta(0)):
         self.plant = plant
-        super().__init__(delay=delay, priority=SchedPriorityTable.should_water, action=self.run,
-                         env_config=env_config)
+        super().__init__(delay=delay, action=self.run, env_config=env_config)
 
     def run(self) -> Task:
         """Check if plants need to be watered
@@ -141,7 +139,7 @@ class WaterTask(Task):
 
     def __init__(self, plant: plant, env_config: EnvironmentConfig, delay=datetime.timedelta(0)):
         self.plant = plant
-        super().__init__(delay=delay, priority=SchedPriorityTable.water, action=self.run, env_config=env_config)
+        super().__init__(delay=delay, action=self.run, env_config=env_config)
 
     def run(self) -> Task:
         """

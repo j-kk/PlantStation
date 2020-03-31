@@ -15,7 +15,8 @@ class Environment(object):
     config  : environment config
         Environment config
 
-    po
+    plants : [Plant]
+        list of plants
 
     Methods:
     --------
@@ -31,8 +32,12 @@ class Environment(object):
 
     """
     config: EnvironmentConfig
-    plants: [Plant] = []
+    _plants: [Plant] = []
     _logger: logging.Logger
+
+    @property
+    def plants(self):
+        return self._plants
 
     def __init__(self, config: EnvironmentConfig):
         """
@@ -53,4 +58,5 @@ class Environment(object):
 
         self._logger.info(f'Created {self.name} environment')
         for params in self.config.read_plants():
-            self.plants.append(Plant(envConfig=self.config, **params))
+            self._plants.append(Plant(envConfig=self.config, **params))
+

@@ -27,13 +27,13 @@ def run():
     else:
         logger.setLevel(logging.INFO)
 
-    logger.debug(f'Path: {args.config_path}')
+    logger.debug(f'Path: {args.config_path[0]}')
 
     if args.config_path[0] is not None:
         if Path(args.config_path[0]).is_file():
             config_path = Path(args.config_path[0])
         else:
-            logger.error(f'Given path is invalid!')
+            logger.error(f'Given _path is invalid!')
             sys.exit(1)
     elif USER_CFG_PATH.joinpath('environment.cfg'):
         config_path = USER_CFG_PATH.joinpath('environment.cfg')

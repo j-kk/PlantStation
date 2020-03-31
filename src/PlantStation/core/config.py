@@ -2,7 +2,7 @@ import configparser
 import datetime
 import logging
 from pathlib import Path
-from threading import Lock, Semaphore
+from threading import Semaphore, RLock
 
 from gpiozero.pins import mock, native
 
@@ -18,18 +18,24 @@ class Config(object):
 
     _path: Path
     _cfg_parser = configparser.RawConfigParser()
-    _cfg_lock = Lock()
-    logger: logging.Logger
-    path: Path
+    _cfg_lock = RLock()
+    _logger: logging.Logger
 
     def __init__(self, logger: logging.Logger, path: Path, dry_run=False):
         """
             Default constructor. Uses program's logger
-        :param logger: logger property
-        :param path: path to config
+
+        Parameters:
+        -----------
+        logger : logging.Logger
+            program's logger
+        path : pathlib.Path
+            path to the config
+        dry_run : boolean = False
+            should all IO operations be mocked?
         """
         self._cfg_parser.optionxform = str
-        self.logger = logger
+        self._logger = logger
         self._path = path
 
         if not dry_run:
@@ -45,13 +51,23 @@ class Config(object):
             self._cfg_parser[key] = value
 
     @property
-    def path(self):  # TODO use it in methods?
+    def logger(self):
+        """
+            Returns global logger
+        """
+        return self._logger
+
+    @property
+    def path(self):
+        """
+            Config location's path
+        """
         with self._cfg_lock:
             return self._path
 
     def read(self) -> None:
         """
-            Reads content from config. Thread safe
+            Reads content from config file. Thread safe
         """
         with self._cfg_lock:
             if not self._cfg_parser.read(self._path):
@@ -62,12 +78,11 @@ class Config(object):
 
     def write(self) -> None:
         """
-            Writes config to file (specified in path). Thread safe
-        :return:
+            Writes config to file. Thread safe
         """
         with self._cfg_lock:
             try:
-                cfg_file = open(self._path, 'w')
+                cfg_file = open(self.path, 'w')
                 self._cfg_parser.write(cfg_file)
                 self.logger.info(f'Created config file in {self._path}')
             except FileNotFoundError or IsADirectoryError as exc:
@@ -81,62 +96,77 @@ class Config(object):
 
 class EnvironmentConfig(Config):
     """
-        Default configuration extended
+        Configuration intended for general use. Stores information about GPIO,
+        creates global logger
     """
-    silent_hours = False
-    dry_run = False
-    pin_factory = None
-    logger: logging.Logger
-    env_name: str
-    active_limit = DEFAULT_ACTIVE_LIMIT
-    pump_lock: Semaphore
-    debug: bool
+    _silent_hours = False
+    _dry_run = False
+    _pin_factory = None
+    _env_name: str
+    _active_limit = DEFAULT_ACTIVE_LIMIT
+    _pump_lock: Semaphore = None
+    _debug: bool
 
     def __init__(self, path: Path, debug=False, dry_run: bool = False):
         """
-            Default constructor. Uses program's logger
-        :param logger: logger property
-        :param path: path to config
-        """
+        Default constructor. Uses program's logger
 
+        Parameters:
+        -----------
+
+        path : pathlib.Path
+            path to config
+        debug : bool = False
+            print extra debug information
+        dry_run : bool = False
+            should pins be mocked?
+        """
+        # check path
         if not path.exists() or not path.is_file():
             raise FileNotFoundError()
         if not path.name.endswith('.cfg'):
             raise FileExistsError('File has wrong suffix')
 
+        # set env vars
         self.env_name = path.name[:-4]
         self.debug = debug
+        self.dry_run = dry_run
 
-        self.logger = logging.getLogger('PlantStation').getChild(self.env_name)
-
+        # create global logger
+        logger = logging.getLogger('PlantStation').getChild(self.env_name)
         Formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         channel = logging.StreamHandler()
         channel.setFormatter(Formatter)
-        self.logger.addHandler(channel)
-        self.logger.setLevel(logging.DEBUG if debug else logging.INFO)
-        super().__init__(self.logger, path)
+        logger.addHandler(channel)
+        logger.setLevel(logging.DEBUG if debug else logging.INFO)
 
+        #initialize config
+        super().__init__(logger, path)
+
+        # read config file
+        self.logger.info(f'Using config file: {self._path}')
         self.read()
-        self.dry_run = dry_run
-        if dry_run:
-            self.pin_factory = mock.MockFactory()
-        else:
-            self.pin_factory = native.NativeFactory()
 
-        self.logger.info(f'Using config file: {self.path}')
+        # create pin factory
+        self._pin_factory = native.NativeFactory() if not dry_run else mock.MockFactory()
 
-        if self._cfg_parser['GLOBAL']['workingHours'] == 'True':
-            if 'silent_hours_begin' in self._cfg_parser['GLOBAL'] and 'silent_hours_end' in self._cfg_parser['GLOBAL']:
-                try:
-                    datetime.datetime.strptime(self._cfg_parser['GLOBAL']['workingHoursBegin'], '%H:%M')
-                    datetime.datetime.strptime(self._cfg_parser['GLOBAL']['workingHoursEnd'], '%H:%M')
-                except ValueError as exc:
-                    self.logger.error(f'Silent hours in wrong format!')
-                    raise exc
-                self.silent_hours = True
+        # check working hours
+        if 'workingHours' in self._cfg_parser['GLOBAL']:
+            if self._cfg_parser['GLOBAL']['workingHours'] == 'True':
+                if 'silent_hours_begin' in self._cfg_parser['GLOBAL'] and 'silent_hours_end' in self._cfg_parser[
+                    'GLOBAL']:
+                    try:
+                        datetime.datetime.strptime(self._cfg_parser['GLOBAL']['workingHoursBegin'], '%H:%M')
+                        datetime.datetime.strptime(self._cfg_parser['GLOBAL']['workingHoursEnd'], '%H:%M')
+                    except ValueError as exc:
+                        self.logger.error(f'Silent hours in wrong format!')
+                        raise exc
+                else:
+                    self.logger.info(f'No silent hours schedule')
             else:
-                self.logger.error(f'No silent hours schedule')
+                self._cfg_parser['GLOBAL']['workingHours'] = 'False'
 
+        # set limit of active pumps
         if 'ActiveLimit' in self._cfg_parser['GLOBAL']:
             try:
                 self.active_limit = int(self._cfg_parser['GLOBAL']['ActiveLimit'])
@@ -145,7 +175,29 @@ class EnvironmentConfig(Config):
                 self.logger.error(f'ActiveLimit is not a number!')
                 raise exc
 
-        self.pump_lock = Semaphore(self.active_limit)
+            if self.active_limit > 0:
+                self._pump_lock = Semaphore(self.active_limit)
+
+    @property
+    def pin_factory(self):
+        """
+            Returns pin factory
+        """
+        return self._pin_factory
+
+    def get_pump_lock(self):
+        """
+            Acquires permission to turn water pump
+        """
+        if self._pump_lock is not None:
+            self._pump_lock.acquire()
+
+    def release_pump_lock(self):
+        """
+            Releases permission
+        """
+        if self._pump_lock is not None:
+            self._pump_lock.release()
 
     def read_plants(self):
         """Reads environment config file - plant section
