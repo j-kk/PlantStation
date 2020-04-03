@@ -131,7 +131,7 @@ class EnvironmentCreator(object):
                 'type': 'input',
                 'message': 'Enter plant\'s name:',
                 'name': 'plantName',
-                'validate': lambda name: name not in self.config and name != ""
+                'validate': lambda name: name not in self.config.cfg_parser and name != ""
             },
             {
                 'type': 'input',

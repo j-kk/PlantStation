@@ -51,6 +51,11 @@ class Config(object):
             self._cfg_parser[key] = value
 
     @property
+    def cfg_parser(self):
+        with self._cfg_lock:
+            return self._cfg_parser
+
+    @property
     def logger(self):
         """
             Returns global logger
