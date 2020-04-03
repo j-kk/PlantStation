@@ -4,13 +4,13 @@ import getpass
 import logging
 import subprocess
 import sys
+
 from PyInquirer import prompt
 from gpiozero import DigitalOutputDevice, GPIOZeroError, Device, pins
 
+from PlantStation.configurer.defaults import *
 from PlantStation.core import Config
 from PlantStation.core.helpers import parse_time, does_throw
-from .defaults import *
-
 
 
 class EnvironmentCreator(object):
@@ -24,7 +24,7 @@ class EnvironmentCreator(object):
     def __init__(self, mock=False, dry_run=False):
         self.mock = mock
         self.dry_run = dry_run
-        #Get general data like config name & location
+        # Get general data like config name & location
         questions = [
             {
                 'type': 'input',
@@ -59,7 +59,7 @@ class EnvironmentCreator(object):
         self.workingHours = str(answers['workingHours'])
         self.ActiveLimit = answers['ActiveLimit']
 
-        #Generate paths to config destinations
+        # Generate paths to config destinations
         local_path = Path.cwd().joinpath(Path(self.env_name + '.cfg'))
 
         if answers['cfg_location'] == 'Specify':
@@ -88,7 +88,6 @@ class EnvironmentCreator(object):
                 break
             except IOError as exc:
                 raise exc
-
 
         self.config['GLOBAL'] = {
             'env_name': self.env_name,
@@ -123,6 +122,7 @@ class EnvironmentCreator(object):
             if self._check_pin(pin_number):
                 self._create_plant(pin_number)
 
+        self.config.write()
 
     def _create_plant(self, pin_number: int):
         # create new plant! :3
@@ -177,8 +177,6 @@ class EnvironmentCreator(object):
         except GPIOZeroError as exc:
             print(f'Couldn\'t set up gpio pin: {pin_number}')
             raise exc
-
-
 
 
 class ServiceCreatorConfig(Config):
@@ -239,9 +237,9 @@ class Configurer():
         mock = vars(args)['mock']
 
         try:
-            creator = EnvironmentCreator(mock=mock)
+            EnvironmentCreator(mock=mock)
 
-            print(f'Created config in {creator.path}')
+            print(f'Created config')
         except Exception as exc:
             print(f'Couldn\'t create config file. Quitting! {exc}')
             sys.exit(1)
@@ -280,6 +278,7 @@ class Configurer():
             else:
                 print(f'Couldn\'t create service files. Quitting!')
             sys.exit(1)
+
 
 if __name__ == '__main__':
     Configurer()
