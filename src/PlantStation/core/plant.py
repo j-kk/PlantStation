@@ -2,6 +2,7 @@ import datetime
 import logging
 import threading
 import time
+from collections import Iterable
 from datetime import timedelta, datetime
 from gpiozero import DigitalOutputDevice, GPIOZeroError
 
@@ -9,7 +10,7 @@ from .helpers.format_validators import is_gpio
 from .config import EnvironmentConfig
 
 
-class Plant:
+class Plant(object):
     """Representation of a plant
 
     Stores basic information about plant.
@@ -42,7 +43,7 @@ class Plant:
     _pumpSwitch: DigitalOutputDevice
     _relatedTask = None
 
-    _infoLock = threading.Lock()
+    _infoLock = threading.RLock()
 
     def __init__(self, plantName: str, envConfig: EnvironmentConfig, gpioPinNumber: str, wateringDuration: timedelta,
                  wateringInterval: timedelta, lastTimeWatered: datetime = datetime.min):
@@ -77,8 +78,7 @@ class Plant:
 
         # define pump
         try:
-            self._pumpSwitch = DigitalOutputDevice(gpioPinNumber, active_high=False,
-                                                   pin_factory=self._envConfig.pin_factory)
+            self._pumpSwitch = self._envConfig.pin_manager.create_pump(gpioPinNumber)
         except GPIOZeroError as exc:
             self._envConfig.logger.error(f'Plant {plantName}: Couldn\'t set up gpio pin: {self._gpioPinNumber}')
             raise exc
@@ -86,10 +86,20 @@ class Plant:
         self._envConfig.logger.debug(
             f'{self._plantName}: Creating successful. Last time watered: {self._lastTimeWatered}. Interval: {self._wateringInterval}. Pin: {self._gpioPinNumber}')
 
+    def __dir__(self) -> Iterable[str]:
+        packed = {
+            'plantName': self.plantName,
+            'wateringDuration': self.wateringDuration,
+            'wateringInterval': self.wateringInterval,
+            'lastTimeWatered': self.lastTimeWatered,
+            'gpioPinNumber': self._gpioPinNumber,
+        }
+        return packed
+
     @property
     def plantName(self) -> str:
-        """Plant's name
-
+        """
+        Plant's name
         """
         with self._infoLock:
             return self.plantName
@@ -101,8 +111,8 @@ class Plant:
 
     @property
     def wateringDuration(self) -> timedelta:
-        """Duration between waterings
-
+        """
+        Duration between waterings
         """
         with self._infoLock:
             return self.wateringDuration
@@ -126,6 +136,14 @@ class Plant:
             self.wateringInterval = value
 
     @property
+    def lastTimeWatered(self) -> datetime:
+        """
+        Last time of watering
+        """
+        with self._infoLock:
+            return self._lastTimeWatered
+
+    @property
     def relatedTask(self):
         with self._infoLock:
             return self._relatedTask
@@ -142,7 +160,6 @@ class Plant:
         """
         try:
             self._logger.info(f'{self._plantName}: Started watering')
-            self._envConfig.get_pump_lock()
             self._pumpSwitch.on()
             time.sleep(self.wateringDuration.total_seconds())
         except GPIOZeroError as exc:
@@ -150,8 +167,8 @@ class Plant:
             raise exc
         finally:
             self._pumpSwitch.off()
-            self._envConfig.release_pump_lock()
-            self._lastTimeWatered = datetime.now()
+            with self._infoLock:
+                self._lastTimeWatered = datetime.now()
             self._logger.info(f'{self._plantName}: Stopped watering')
 
     def should_water(self) -> bool:

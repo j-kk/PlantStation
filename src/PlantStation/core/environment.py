@@ -57,6 +57,6 @@ class Environment(object):
         self._logger.setLevel(logging.DEBUG if self.config.debug else logging.INFO)
 
         self._logger.info(f'Created {self.name} environment')
-        for params in self.config.read_plants():
+        for params in self.config.parse_plants():
             self._plants.append(Plant(envConfig=self.config, **params))
 

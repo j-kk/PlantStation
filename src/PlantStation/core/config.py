@@ -1,11 +1,13 @@
 import configparser
+import copy
 import datetime
 import logging
 from pathlib import Path
-from threading import Semaphore, RLock
+from threading import RLock
 
-from gpiozero.pins import mock, native
+import shutil
 
+from .ext.pins import PinManager
 from .helpers.format_validators import parse_time
 
 DEFAULT_ACTIVE_LIMIT = 1
@@ -70,6 +72,13 @@ class Config(object):
         with self._cfg_lock:
             return self._path
 
+    @path.setter
+    def path(self, value: Path):
+        with self._cfg_lock:
+            if self._path:
+                shutil.move(value, self._path)
+            self._path = value
+
     def read(self) -> None:
         """
             Reads content from config file. Thread safe
@@ -104,15 +113,12 @@ class EnvironmentConfig(Config):
         Configuration intended for general use. Stores information about GPIO,
         creates global logger
     """
-    _silent_hours = False
     _dry_run = False
-    _pin_factory = None
     _env_name: str
-    _active_limit = DEFAULT_ACTIVE_LIMIT
-    _pump_lock: Semaphore = None
     _debug: bool
+    pin_manager: PinManager
 
-    def __init__(self, path: Path, debug=False, dry_run: bool = False):
+    def __init__(self, env_name: str, path=None, debug=False, dry_run: bool = False):
         """
         Default constructor. Uses program's logger
 
@@ -126,12 +132,6 @@ class EnvironmentConfig(Config):
         dry_run : bool = False
             should pins be mocked?
         """
-        # check path
-        if not path.exists() or not path.is_file():
-            raise FileNotFoundError()
-        if not path.name.endswith('.cfg'):
-            raise FileExistsError('File has wrong suffix')
-
         # set env vars
         self.env_name = path.name[:-4]
         self.debug = debug
@@ -145,66 +145,73 @@ class EnvironmentConfig(Config):
         logger.addHandler(channel)
         logger.setLevel(logging.DEBUG if debug else logging.INFO)
 
-        #initialize config
+        # initialize config
         super().__init__(logger, path)
 
+        # initialize pins
+        self.pin_manager = PinManager(dry_run=dry_run)
+
         # read config file
-        self.logger.info(f'Using config file: {self._path}')
-        self.read()
+        if self._path:
+            self.logger.info(f'Using config file: {self._path}')
+        else:
+            self.logger.info(f'Config file not provided!')
 
-        # create pin factory
-        self._pin_factory = native.NativeFactory() if not dry_run else mock.MockFactory()
-
-        # check working hours
-        if 'workingHours' in self._cfg_parser['GLOBAL']:
-            if self._cfg_parser['GLOBAL']['workingHours'] == 'True':
-                if 'silent_hours_begin' in self._cfg_parser['GLOBAL'] and 'silent_hours_end' in self._cfg_parser[
-                    'GLOBAL']:
-                    try:
-                        datetime.datetime.strptime(self._cfg_parser['GLOBAL']['workingHoursBegin'], '%H:%M')
-                        datetime.datetime.strptime(self._cfg_parser['GLOBAL']['workingHoursEnd'], '%H:%M')
-                    except ValueError as exc:
-                        self.logger.error(f'Silent hours in wrong format!')
-                        raise exc
-                else:
-                    self.logger.info(f'No silent hours schedule')
-            else:
-                self._cfg_parser['GLOBAL']['workingHours'] = 'False'
-
-        # set limit of active pumps
-        if 'ActiveLimit' in self._cfg_parser['GLOBAL']:
-            try:
-                self.active_limit = int(self._cfg_parser['GLOBAL']['ActiveLimit'])
-                self.logger.debug(f'Active limit set to {self.active_limit}')
-            except ValueError as exc:
-                self.logger.error(f'ActiveLimit is not a number!')
-                raise exc
-
-            if self.active_limit > 0:
-                self._pump_lock = Semaphore(self.active_limit)
 
     @property
-    def pin_factory(self):
-        """
-            Returns pin factory
-        """
-        return self._pin_factory
+    def silent_hours(self):
+        try:
+            if self.cfg_parser['GLOBAL']['workingHours'] == 'True':
+                begin = datetime.datetime.strptime(self.cfg_parser['GLOBAL']['workingHoursBegin'], '%H:%M')
+                end = datetime.datetime.strptime(self.cfg_parser['GLOBAL']['workingHoursEnd'], '%H:%M')
+                return begin, end
+            else:
+                return None
+        except KeyError as exc:
+            self.logger.error(f'Silent hours not given!')
+            return None
+        except ValueError as exc:
+            self.logger.fatal(f'Silent hours in wrong format {exc}!')
+            raise exc
 
-    def get_pump_lock(self):
-        """
-            Acquires permission to turn water pump
-        """
-        if self._pump_lock is not None:
-            self._pump_lock.acquire()
+    @silent_hours.setter
+    def silent_hours(self, value: (datetime.time, datetime.time)):
+        with self._cfg_lock:
+            self.cfg_parser['GLOBAL']['workingHoursBegin'] = str(value[1])
+            self.cfg_parser['GLOBAL']['workingHoursEnd'] = str(value[0])
 
-    def release_pump_lock(self):
-        """
-            Releases permission
-        """
-        if self._pump_lock is not None:
-            self._pump_lock.release()
+    @property
+    def active_limit(self):
+        try:
+            return int(self._cfg_parser['GLOBAL']['ActiveLimit'])
+        except KeyError:
+            return DEFAULT_ACTIVE_LIMIT
 
-    def read_plants(self):
+    @active_limit.setter
+    def active_limit(self, value: int):
+        self.pin_manager.active_limit = value
+        self.cfg_parser['GLOBAL']['ActiveLimit'] = str(value)
+        self.logger.debug(f'Active limit set to {value}')
+
+    def list_plants(self):
+        """
+        Returns list of all plants' names specified in config
+        """
+        sections = self.cfg_parser.sections()
+        sections.remove('DEFAULT')
+        sections.remove('GLOBAL')
+        return sections
+
+    def add_plant(self, plant):
+        section = dict(plant)
+
+        with self._cfg_lock:
+            self.cfg_parser[section['plantName']] = {}
+
+            for key, val in section:
+                self.cfg_parser[section['plantName']][key] = copy.copy(val)
+
+    def parse_plants(self):
         """Reads environment config file - plant section
 
         Reads config file from location defined by self._cfg_paths
@@ -242,3 +249,18 @@ class EnvironmentConfig(Config):
                     self.logger.error(
                         f'{self._path} Failed to read {section} section {err}')
         return plant_params
+
+    @staticmethod
+    def create_from_file(path: Path, debug: bool = False, dry_run: bool = False):
+        # check path
+        if not path.exists() or not path.is_file():
+            raise FileNotFoundError()
+        if not path.name.endswith('.cfg'):
+            raise FileExistsError('File has wrong suffix')
+
+        env_name = path.name[:-4]
+        env = EnvironmentConfig(env_name, path, debug, dry_run)
+        env.read()
+        env.pin_manager.active_limit = env.active_limit #TODO in future
+        return env
+

@@ -5,8 +5,8 @@ daemon==1.2
 gpiozero==1.5.1
 lockfile==0.12.2
 prompt-toolkit==3.0.5
-Pygments==2.5.2
+Pygments
 PyInquirer==1.0.3
-regex==2020.2.20
+regex
 six==1.14.0
-wcwidth==0.1.8
+wcwidth
