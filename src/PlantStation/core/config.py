@@ -1,11 +1,9 @@
 import configparser
-import copy
 import datetime
 import logging
+import shutil
 from pathlib import Path
 from threading import RLock
-
-import shutil
 
 from .ext.pins import PinManager
 from .helpers.format_validators import parse_time
@@ -18,7 +16,7 @@ class Config(object):
         Thrad safe config structure with logging
     """
 
-    _path: Path
+    _path: Path = None
     _cfg_parser : configparser.RawConfigParser
     _cfg_lock : RLock
     _logger: logging.Logger
@@ -40,8 +38,9 @@ class Config(object):
         self._cfg_parser = configparser.RawConfigParser()
         self._cfg_parser.optionxform = str
         self._logger = logger
-        self._path = path
         self._dry_run = dry_run
+        if path:
+            self.path = path
 
     def __getitem__(self, item):
         with self._cfg_lock:
@@ -69,20 +68,25 @@ class Config(object):
             Config location's path
         """
         with self._cfg_lock:
-            return self._path
+            if not self._path:
+                self.logger.critical(f'Config path was not set')
+                raise ValueError(f'Config path is not set')
+            else:
+                return self._path
+
 
     @path.setter
     def path(self, value: Path):
         with self._cfg_lock:
-            if value.is_dir():
-                raise IsADirectoryError()
             if value.suffix != '.cfg':
                 raise ValueError(f'Specified path is not a .cfg')
+            if value.is_dir():
+                raise IsADirectoryError()
             if not self._dry_run:
                 if not value.parent.is_dir():
                     self._path.parent.mkdir(parents=True)
             if self._path:
-                shutil.move(value, self._path)
+                shutil.move(self._path, value)
             self._path = value
 
     def read(self) -> None:
@@ -90,10 +94,7 @@ class Config(object):
             Reads content from config file. Thread safe
         """
         with self._cfg_lock:
-            if not self.path:
-                self.logger.critical(f'Can\'t write config to file! Config path was not set')
-                raise ValueError(f'Config path is not set')
-            elif not self._cfg_parser.read(self.path):
+            if not self._cfg_parser.read(self.path):
                 self.logger.critical(f'Config file {self.path} not found')
                 raise FileNotFoundError(f'Error: environment config file not found. Quitting!')
             else:
@@ -156,7 +157,8 @@ class EnvironmentConfig(Config):
 
         # initialize config
         super().__init__(logger, path)
-
+        if path is None:
+            self.cfg_parser['GLOBAL'] = {}
         # initialize pins
         self.pin_manager = PinManager(dry_run=dry_run)
 
@@ -164,23 +166,25 @@ class EnvironmentConfig(Config):
     def silent_hours(self):
         try:
             if self.cfg_parser['GLOBAL']['workingHours'] == 'True':
-                begin = datetime.datetime.strptime(self.cfg_parser['GLOBAL']['workingHoursBegin'], '%H:%M')
-                end = datetime.datetime.strptime(self.cfg_parser['GLOBAL']['workingHoursEnd'], '%H:%M')
-                return begin, end
+                begin = datetime.datetime.strptime(self.cfg_parser['GLOBAL']['workingHoursBegin'], '%H:%M').time()
+                end = datetime.datetime.strptime(self.cfg_parser['GLOBAL']['workingHoursEnd'], '%H:%M').time()
+                return [begin, end]
             else:
                 return None
         except KeyError as exc:
             self.logger.error(f'Silent hours not given!')
-            return None
+            raise exc
         except ValueError as exc:
             self.logger.fatal(f'Silent hours in wrong format {exc}!')
             raise exc
 
     @silent_hours.setter
     def silent_hours(self, value: (datetime.time, datetime.time)):
+        value = list(map(lambda t: t.strftime('%H:%M'), value))
         with self._cfg_lock:
-            self.cfg_parser['GLOBAL']['workingHoursBegin'] = str(value[1])
-            self.cfg_parser['GLOBAL']['workingHoursEnd'] = str(value[0])
+            self.cfg_parser['GLOBAL']['workingHours'] = str(True)
+            self.cfg_parser['GLOBAL']['workingHoursBegin'] = value[1]
+            self.cfg_parser['GLOBAL']['workingHoursEnd'] = value[0]
 
     @property
     def active_limit(self):

@@ -1,58 +1,124 @@
-import PlantStation
+import datetime
 import pathlib
+import uuid
 
 import gpiozero
+import mock
 import pytest
 
-from .context import create_config, create_plant, cleanup
+import PlantStation
+from core.config import Config, EnvironmentConfig
+from .context import create_plant
 
 
-def test_simple_config():
-    config = create_config(0)
-    assert config.active_limit == config.pin_manager.active_limit
-    assert config.pin_manager.active_limit == PlantStation.core.ext.pins.DEFAULT_ACTIVE_LIMIT
-    assert config.pin_manager.working_pumps == 0
-    assert isinstance(config.pin_manager.pin_factory, gpiozero.pins.mock.MockFactory)
-    assert config.debug
-    assert len(config.list_plants()) == 0
-    assert config.silent_hours == None
+class ConfigSchema:
 
+    def config_creator(self, path=None) -> Config:
+        pass
 
-def test_too_many_plants():
-    with pytest.raises(gpiozero.exc.PinInvalidPin):
-        create_config(100)
+    def test_config_no_path(self):
+        config = self.config_creator(path=None)
+        with pytest.raises(ValueError):
+            config.read()
+        with pytest.raises(ValueError):
+            config.write()
 
-def test_the_same_pin():
-    config = create_config(0)
-    with pytest.raises(gpiozero.exc.GPIOPinInUse):
-        plant = create_plant(config, 5)
-        config.add_plant(plant)
-        plant = create_plant(config, 5)
-        config.add_plant(plant)
+    def test_files_not_found(self, tmp_path):
+        file = pathlib.Path(tmp_path).joinpath(pathlib.Path(uuid.uuid4().__str__() + '.cfg'))
+        config = self.config_creator(path=file)
+        with pytest.raises(FileNotFoundError):
+            config.read()
+        config.write()
+        assert file.exists()
 
+    def test_filepath_empty(self):
+        file = pathlib.Path("")
+        with pytest.raises(ValueError):
+            config = self.config_creator(path=file)
 
+    def test_permission_error(self):  # TODO
+        pass
 
-def test_config_with_plants():
-    config = create_config(10)
-    assert len(config.list_plants()) == 10
-    
+    def test_write_all_ok(self, tmp_path):
+        path = pathlib.Path(tmp_path).joinpath(pathlib.Path('file.cfg'))
+        config = self.config_creator(path=path)
+        config.write()
+        assert path.exists()
 
-
-def test_config_and_save(tmp_path):
-    path = pathlib.Path(tmp_path).joinpath(pathlib.Path('file.cfg'))
-    config = create_config(10)
-    config.path = path
-    config.write()
-    assert path.exists()
-
-def test_config_and_save_wrong_filename(tmp_path):
-    path = pathlib.Path(tmp_path).joinpath(pathlib.Path('file.fg'))
-    config = create_config(10)
-    with pytest.raises(ValueError):
+    def test_write_all_ok2(self, tmp_path):
+        path = pathlib.Path(tmp_path).joinpath(pathlib.Path('file.cfg'))
+        config = self.config_creator(path=None)
         config.path = path
+        config.write()
+        assert path.exists()
 
-def test_config_and_save_directory(tmp_path):
-    path = pathlib.Path(tmp_path)
-    config = create_config(10)
-    with pytest.raises(IsADirectoryError):
-        config.path = path
+    def test_move_config(self, tmp_path):
+        path1 = pathlib.Path(tmp_path).joinpath(pathlib.Path('file1.cfg'))
+        path2 = pathlib.Path(tmp_path).joinpath(pathlib.Path('file2.cfg'))
+        config = self.config_creator(path=path1)
+        config.write()
+        config.path = path2
+        assert not path1.exists()
+        assert path2.exists()
+
+
+class TestConfig(ConfigSchema):
+
+    @mock.patch("logging.Logger")
+    def config_creator(self, mock_logger: mock.MagicMock, path) -> Config:
+        return Config(logger=mock_logger, path=path, dry_run=True)
+
+
+class TestEnvironmentConfig(ConfigSchema):
+
+    def config_creator(self, path=None) -> Config:
+        return EnvironmentConfig('test_env', path=path, debug=True, dry_run=True)
+
+    @pytest.fixture(params=[0, 10])
+    def multiple_config_creator(self, request):
+        env_config = EnvironmentConfig('test_env', path=None, debug=True, dry_run=True)
+        assert 0 <= request.param
+        for pin in range(4, 4 + request.param):
+            plant = create_plant(env_config, pin)
+            env_config.add_plant(plant)
+
+        assert len(env_config.list_plants()) == request.param
+        return env_config
+
+    def config_creator_plants(self, n_plants, path=None):
+        env_config = EnvironmentConfig('test_env', path=path, debug=True, dry_run=True)
+        assert 0 <= n_plants
+        for pin in range(4, 4 + n_plants):
+            plant = create_plant(env_config, pin)
+            env_config.add_plant(plant)
+        return env_config
+
+    def test_simple_config(self, multiple_config_creator):
+        config = multiple_config_creator
+        assert config.active_limit == config.pin_manager.active_limit
+        assert config.pin_manager.active_limit == PlantStation.core.ext.pins.DEFAULT_ACTIVE_LIMIT
+        assert config.pin_manager.working_pumps == 0
+        assert isinstance(config.pin_manager.pin_factory, gpiozero.pins.mock.MockFactory)
+        assert config.debug
+        with pytest.raises(KeyError):
+            r = config.silent_hours
+
+        config.silent_hours = (datetime.time(22, 00), datetime.time(7, 00))
+        assert isinstance(config.silent_hours[0], datetime.time)
+        assert isinstance(config.silent_hours[1], datetime.time)
+
+    def test_too_many_plants(self):
+        with pytest.raises(gpiozero.exc.PinInvalidPin):
+            self.config_creator_plants(100)
+
+    def test_the_same_pin(self):
+        config = self.config_creator_plants(0)
+        with pytest.raises(gpiozero.exc.GPIOPinInUse):
+            plant = create_plant(config, 5)
+            config.add_plant(plant)
+            plant = create_plant(config, 5)
+            config.add_plant(plant)
+
+    def test_config_with_plants(self):
+        config = self.config_creator_plants(10)
+        assert len(config.list_plants()) == 10

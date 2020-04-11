@@ -1,11 +1,8 @@
 import datetime
-import os
-import sys
 
 import pytest
 
-from PlantStation.core import EnvironmentConfig, Plant
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from PlantStation.core import Plant
 
 TIMEDELTA_SHORT = datetime.timedelta(seconds=5)
 TIMEDELTA_LONG  = datetime.timedelta(seconds=15)
@@ -26,13 +23,3 @@ def create_plant(env_config, pin):
     plants.append(plant)
     return plant
 
-
-def create_config(n_plants):
-    env_config = EnvironmentConfig('test_env', debug=True, dry_run=True)
-    #todo gpioPinNumber from test_helpers
-    assert 0 <= n_plants
-    plants = []
-    for pin in range(4, 4 + n_plants):
-        plants.append(create_plant(env_config, pin))
-        env_config.add_plant(plants[-1])
-    return env_config
