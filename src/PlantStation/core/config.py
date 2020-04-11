@@ -158,7 +158,9 @@ class EnvironmentConfig(Config):
         # initialize config
         super().__init__(logger, path)
         if path is None:
-            self.cfg_parser['GLOBAL'] = {}
+            self.cfg_parser['GLOBAL'] = {
+                'env_name': self.env_name
+            }
         # initialize pins
         self.pin_manager = PinManager(dry_run=dry_run)
 
@@ -166,8 +168,8 @@ class EnvironmentConfig(Config):
     def silent_hours(self):
         try:
             if self.cfg_parser['GLOBAL']['workingHours'] == 'True':
-                begin = datetime.datetime.strptime(self.cfg_parser['GLOBAL']['workingHoursBegin'], '%H:%M').time()
-                end = datetime.datetime.strptime(self.cfg_parser['GLOBAL']['workingHoursEnd'], '%H:%M').time()
+                begin = datetime.time.fromisoformat(self.cfg_parser['GLOBAL']['workingHoursBegin'])
+                end = datetime.time.fromisoformat(self.cfg_parser['GLOBAL']['workingHoursEnd'])
                 return [begin, end]
             else:
                 return None
@@ -177,6 +179,11 @@ class EnvironmentConfig(Config):
         except ValueError as exc:
             self.logger.fatal(f'Silent hours in wrong format {exc}!')
             raise exc
+
+    def disable_silent_hours(self):
+        with self._cfg_lock:
+            self.logger.info(f'Disabled silent hours')
+            self.cfg_parser['GLOBAL']['workingHours'] = str(False)
 
     @silent_hours.setter
     def silent_hours(self, value: (datetime.time, datetime.time)):
@@ -199,7 +206,7 @@ class EnvironmentConfig(Config):
         self.cfg_parser['GLOBAL']['ActiveLimit'] = str(value)
         self.logger.debug(f'Active limit set to {value}')
 
-    def list_plants(self):
+    def list_plants(self) -> [str]:
         """
         Returns list of all plants' names specified in config
         """
@@ -208,7 +215,7 @@ class EnvironmentConfig(Config):
             sections.remove('GLOBAL')
         return sections
 
-    def add_plant(self, plant):
+    def update_plant_section(self, plant):
         section = dir(plant)
 
         with self._cfg_lock:
@@ -216,6 +223,10 @@ class EnvironmentConfig(Config):
 
             for key in section:
                 self.cfg_parser[plant.plantName][key] = str(getattr(plant, key))
+
+    def remove_plant_section(self, plant):
+        with self._cfg_lock:
+            self.cfg_parser.remove_section(plant.plantName)
 
     def parse_plants(self):
         """Reads environment config file - plant section

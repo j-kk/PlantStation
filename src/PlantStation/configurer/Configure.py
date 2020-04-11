@@ -11,6 +11,7 @@ from gpiozero import DigitalOutputDevice, GPIOZeroError, Device, pins
 from PlantStation.configurer.defaults import *
 from PlantStation.core import Config
 from PlantStation.core.helpers import parse_time, does_throw
+from core import EnvironmentConfig, Plant
 
 
 class EnvironmentCreator(object):
@@ -19,7 +20,7 @@ class EnvironmentCreator(object):
     """
     env_name: str
     dry_run: bool = False
-    config: Config
+    config: EnvironmentConfig
 
     def __init__(self, mock=False, dry_run=False):
         self.mock = mock
@@ -57,7 +58,8 @@ class EnvironmentCreator(object):
         answers = prompt(questions)
         self.env_name = answers['envName']
         self.workingHours = str(answers['workingHours'])
-        self.ActiveLimit = answers['ActiveLimit']
+        self.config = EnvironmentConfig(self.env_name)
+        self.config.active_limit = answers['ActiveLimit']
 
         # Generate paths to config destinations
         local_path = Path.cwd().joinpath(Path(self.env_name + '.cfg'))
@@ -80,20 +82,13 @@ class EnvironmentCreator(object):
         else:
             paths = [local_path]
 
-        logger = logging.getLogger(self.env_name)
         for path in paths:
             try:
-                self.config = Config(logger, path, dry_run=dry_run)
-                self.path = path
+                self.config.path = path
                 break
-            except IOError as exc:
+            except ValueError or IsADirectoryError as exc:
                 raise exc
 
-        self.config['GLOBAL'] = {
-            'env_name': self.env_name,
-            'workingHours': str(answers['workingHours']),
-            'ActiveLimit': answers['ActiveLimit']
-        }
         if answers['workingHours']:
             questions = [
                 {
@@ -110,8 +105,7 @@ class EnvironmentCreator(object):
                 }
             ]
             answers = prompt(questions)
-            self.config['GLOBAL']['workingHoursBegin'] = answers['workingHoursBegin']
-            self.config['GLOBAL']['workingHoursEnd'] = answers['workingHoursEnd']
+            self.config['GLOBAL']['workingHoursBegin'] = (answers['workingHoursBegin'], answers['workingHoursEnd'])
 
         if self.mock:
             Device.pin_factory = pins.mock.MockFactory()
@@ -148,15 +142,10 @@ class EnvironmentCreator(object):
         ]
 
         answers = prompt(questions)
-
-        self.config[answers['plantName']] = {
-            'plantName': answers['plantName'],
-            'wateringDuration': answers['wateringDuration'],
-            'wateringInterval': answers['wateringInterval'],
-            'lastTimeWatered': '',
-            'gpioPinNumber': 'GPIO' + str(pin_number),
-            'isActive': 'True'
-        }
+        plant = Plant(answers['plantName'], self.config, gpioPinNumber='GPIO' + str(pin_number),
+                      wateringDuration=answers['wateringDuration'], wateringInterval=answers['wateringInterval'],
+                      isActive=True)
+        self.config.update_plant_section(plant)
 
     def _check_pin(self, pin_number: int) -> bool:
         try:

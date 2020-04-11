@@ -2,12 +2,14 @@ import datetime
 import logging
 import threading
 import time
-from collections import Iterable
 from datetime import timedelta, datetime
+from functools import wraps
+from typing import Callable
+
 from gpiozero import DigitalOutputDevice, GPIOZeroError
 
-from .helpers.format_validators import is_gpio
 from .config import EnvironmentConfig
+from .helpers.format_validators import is_gpio
 
 
 class Plant(object):
@@ -42,11 +44,12 @@ class Plant(object):
     _gpioPinNumber: str
     _pumpSwitch: DigitalOutputDevice
     _relatedTask = None
+    _isActive = False
 
-    _infoLock = threading.RLock()
+    _infoLock: threading.RLock
 
     def __init__(self, plantName: str, envConfig: EnvironmentConfig, gpioPinNumber: str, wateringDuration: timedelta,
-                 wateringInterval: timedelta, lastTimeWatered: datetime = datetime.min):
+                 wateringInterval: timedelta, lastTimeWatered: datetime = datetime.min, isActive=True):
         """
         Args:
             plantName (str): Plant name
@@ -66,6 +69,7 @@ class Plant(object):
             raise ValueError('Wrong GPIO value')
 
         # set all attributes
+        self._infoLock = threading.RLock()
         self._envConfig = envConfig
 
         self._plantName = plantName
@@ -75,13 +79,7 @@ class Plant(object):
 
         self._gpioPinNumber = gpioPinNumber
         self._logger = self._envConfig.logger.getChild(self._plantName)
-
-        # define pump
-        try:
-            self._pumpSwitch = self._envConfig.pin_manager.create_pump(gpioPinNumber)
-        except GPIOZeroError as exc:
-            self._envConfig.logger.error(f'Plant {plantName}: Couldn\'t set up gpio pin: {self._gpioPinNumber}')
-            raise exc
+        self.isActive = isActive
 
         self._envConfig.logger.debug(
             f'{self._plantName}: Creating successful. Last time watered: {self._lastTimeWatered}. Interval: {self._wateringInterval}. Pin: {self._gpioPinNumber}')
@@ -96,6 +94,15 @@ class Plant(object):
         ]
         return packed
 
+    def _update_config(propertySetter: Callable):
+        @wraps(propertySetter)
+        def _property_modifier(self, *args, **kwargs):
+            with self._infoLock:
+                propertySetter(self, *args, **kwargs)
+                self._envConfig.update_plant_section(self)
+
+        return _property_modifier
+
     @property
     def plantName(self) -> str:
         """
@@ -105,6 +112,7 @@ class Plant(object):
             return self._plantName
 
     @plantName.setter
+    @_update_config
     def plantName(self, plantName: str) -> None:
         with self._infoLock:
             self.plantName = plantName
@@ -118,6 +126,7 @@ class Plant(object):
             return self._wateringDuration
 
     @wateringDuration.setter
+    @_update_config
     def wateringDuration(self, value: timedelta) -> None:
         with self._infoLock:
             self._wateringDuration = value
@@ -131,7 +140,8 @@ class Plant(object):
             return self._wateringInterval
 
     @wateringInterval.setter
-    def wateringInterval(self, value: timedelta) -> None:
+    @_update_config
+    def wateringInterval(self, value: timedelta):
         with self._infoLock:
             self.wateringInterval = value
 
@@ -149,6 +159,30 @@ class Plant(object):
             return self._gpioPinNumber
 
     @property
+    def isActive(self):
+        with self._infoLock:
+            return self._isActive
+
+    @isActive.setter
+    @_update_config
+    def isActive(self, value: bool):
+        with self._infoLock:
+            if self._isActive == value:
+                return
+            elif value:
+                # define pump
+                try:
+                    self._pumpSwitch = self._envConfig.pin_manager.create_pump(self._gpioPinNumber)
+                    self._envConfig.logger.info(f'Pump activated')
+                    self._isActive = value
+                except GPIOZeroError as exc:
+                    self._envConfig.logger.error(f'Couldn\'t set up gpio pin: {self._gpioPinNumber}')
+                    raise exc
+            else:
+                self._pumpSwitch.close()
+                self._envConfig.logger.info(f'Pump deactivated')
+
+    @property
     def relatedTask(self):
         with self._infoLock:
             return self._relatedTask
@@ -163,18 +197,21 @@ class Plant(object):
             Waters plant. Obtains pump lock (EnvironmentConfig specifies max number of simultanously working pumps).
             Blocks thread until plant is watered
         """
-        try:
-            self._logger.info(f'{self._plantName}: Started watering')
-            self._pumpSwitch.on()
-            time.sleep(self.wateringDuration.total_seconds())
-        except GPIOZeroError as exc:
-            self._logger.error(f'{self._plantName}: GPIO error')
-            raise exc
-        finally:
-            self._pumpSwitch.off()
-            with self._infoLock:
-                self._lastTimeWatered = datetime.now()
-            self._logger.info(f'{self._plantName}: Stopped watering')
+        if self.isActive:
+            try:
+                self._logger.info(f'{self._plantName}: Started watering')
+                self._pumpSwitch.on()
+                time.sleep(self.wateringDuration.total_seconds())
+            except GPIOZeroError as exc:
+                self._logger.error(f'{self._plantName}: GPIO error')
+                raise exc
+            finally:
+                self._pumpSwitch.off()
+                with self._infoLock:
+                    self._lastTimeWatered = datetime.now()
+                self._logger.info(f'{self._plantName}: Stopped watering')
+        else:
+            self._logger.info(f'Water: Pump is not active')
 
     def should_water(self) -> bool:
         """Checks if it is right to water plant now

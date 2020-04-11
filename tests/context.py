@@ -14,7 +14,7 @@ def cleanup(request):
     """Cleanup a testing directory once we are finished."""
     def clean_plants():
         for plant in plants:
-            plant._pumpSwitch.close() #TODO
+            plant.isActive = False
     request.addfinalizer(clean_plants)
 
 def create_plant(env_config, pin):

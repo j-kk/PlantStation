@@ -8,7 +8,8 @@ import pytest
 
 import PlantStation
 from core.config import Config, EnvironmentConfig
-from .context import create_plant
+# noinspection PyUnresolvedReferences
+from .context import create_plant, cleanup
 
 
 class ConfigSchema:
@@ -80,7 +81,7 @@ class TestEnvironmentConfig(ConfigSchema):
         assert 0 <= request.param
         for pin in range(4, 4 + request.param):
             plant = create_plant(env_config, pin)
-            env_config.add_plant(plant)
+            env_config.update_plant_section(plant)
 
         assert len(env_config.list_plants()) == request.param
         return env_config
@@ -90,7 +91,7 @@ class TestEnvironmentConfig(ConfigSchema):
         assert 0 <= n_plants
         for pin in range(4, 4 + n_plants):
             plant = create_plant(env_config, pin)
-            env_config.add_plant(plant)
+            env_config.update_plant_section(plant)
         return env_config
 
     def test_simple_config(self, multiple_config_creator):
@@ -115,9 +116,9 @@ class TestEnvironmentConfig(ConfigSchema):
         config = self.config_creator_plants(0)
         with pytest.raises(gpiozero.exc.GPIOPinInUse):
             plant = create_plant(config, 5)
-            config.add_plant(plant)
+            config.update_plant_section(plant)
             plant = create_plant(config, 5)
-            config.add_plant(plant)
+            config.update_plant_section(plant)
 
     def test_config_with_plants(self):
         config = self.config_creator_plants(10)
