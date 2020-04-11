@@ -104,6 +104,6 @@ class PinManager(object):
         -------
         LimitedDigitalOutputDevice
         """
-        device = LimitedDigitalOutputDevice(self, pin_number)
+        device = LimitedDigitalOutputDevice(self, pin=pin_number, pin_factory=self.pin_factory)
         self._devices.append(device)
         return device

@@ -39,10 +39,7 @@ class Config(object):
         self._cfg_parser.optionxform = str
         self._logger = logger
         self._path = path
-
-        if not dry_run:
-            if not self._path.parent.is_dir():
-                self._path.parent.mkdir(parents=True)
+        self._dry_run = dry_run
 
     def __getitem__(self, item):
         with self._cfg_lock:
@@ -75,6 +72,13 @@ class Config(object):
     @path.setter
     def path(self, value: Path):
         with self._cfg_lock:
+            if value.is_dir():
+                raise IsADirectoryError()
+            if value.suffix != '.cfg':
+                raise ValueError(f'Specified path is not a .cfg')
+            if not self._dry_run:
+                if not value.parent.is_dir():
+                    self._path.parent.mkdir(parents=True)
             if self._path:
                 shutil.move(value, self._path)
             self._path = value
@@ -84,8 +88,11 @@ class Config(object):
             Reads content from config file. Thread safe
         """
         with self._cfg_lock:
-            if not self._cfg_parser.read(self._path):
-                self.logger.critical(f'Config file {self._path} not found')
+            if not self.path:
+                self.logger.critical(f'Can\'t write config to file! Config path was not set')
+                raise ValueError(f'Config path is not set')
+            elif not self._cfg_parser.read(self.path):
+                self.logger.critical(f'Config file {self.path} not found')
                 raise FileNotFoundError(f'Error: environment config file not found. Quitting!')
             else:
                 self.logger.info(f'Config file {self._path} read succesfully!')
@@ -133,7 +140,7 @@ class EnvironmentConfig(Config):
             should pins be mocked?
         """
         # set env vars
-        self.env_name = path.name[:-4]
+        self.env_name = env_name
         self.debug = debug
         self.dry_run = dry_run
 
@@ -150,13 +157,6 @@ class EnvironmentConfig(Config):
 
         # initialize pins
         self.pin_manager = PinManager(dry_run=dry_run)
-
-        # read config file
-        if self._path:
-            self.logger.info(f'Using config file: {self._path}')
-        else:
-            self.logger.info(f'Config file not provided!')
-
 
     @property
     def silent_hours(self):
@@ -203,13 +203,13 @@ class EnvironmentConfig(Config):
         return sections
 
     def add_plant(self, plant):
-        section = dict(plant)
+        section = dir(plant)
 
         with self._cfg_lock:
-            self.cfg_parser[section['plantName']] = {}
+            self.cfg_parser[plant.plantName] = {}
 
-            for key, val in section:
-                self.cfg_parser[section['plantName']][key] = copy.copy(val)
+            for key in section:
+                self.cfg_parser[plant.plantName][key] = str(getattr(plant, key))
 
     def parse_plants(self):
         """Reads environment config file - plant section

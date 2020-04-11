@@ -23,7 +23,7 @@ def test_basic():
 def test_random():
     random = Random(rand_seed)
 
-    for it in range(0, 100000):
+    for it in range(0, 10000):
         days = random.randint(0, 99)
         hour = random.randint(0, 23)
         minute = random.randint(0, 59)

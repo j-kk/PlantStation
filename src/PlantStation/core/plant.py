@@ -86,14 +86,14 @@ class Plant(object):
         self._envConfig.logger.debug(
             f'{self._plantName}: Creating successful. Last time watered: {self._lastTimeWatered}. Interval: {self._wateringInterval}. Pin: {self._gpioPinNumber}')
 
-    def __dir__(self) -> Iterable[str]:
-        packed = {
-            'plantName': self.plantName,
-            'wateringDuration': self.wateringDuration,
-            'wateringInterval': self.wateringInterval,
-            'lastTimeWatered': self.lastTimeWatered,
-            'gpioPinNumber': self._gpioPinNumber,
-        }
+    def __dir__(self):
+        packed = [
+            'plantName',
+            'wateringDuration',
+            'wateringInterval',
+            'lastTimeWatered',
+            'gpioPinNumber'
+        ]
         return packed
 
     @property
@@ -102,7 +102,7 @@ class Plant(object):
         Plant's name
         """
         with self._infoLock:
-            return self.plantName
+            return self._plantName
 
     @plantName.setter
     def plantName(self, plantName: str) -> None:
@@ -115,7 +115,7 @@ class Plant(object):
         Duration between waterings
         """
         with self._infoLock:
-            return self.wateringDuration
+            return self._wateringDuration
 
     @wateringDuration.setter
     def wateringDuration(self, value: timedelta) -> None:
@@ -142,6 +142,11 @@ class Plant(object):
         """
         with self._infoLock:
             return self._lastTimeWatered
+
+    @property
+    def gpioPinNumber(self):
+        with self._infoLock:
+            return self._gpioPinNumber
 
     @property
     def relatedTask(self):
