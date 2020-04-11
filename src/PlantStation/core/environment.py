@@ -32,7 +32,7 @@ class Environment(object):
 
     """
     config: EnvironmentConfig
-    _plants: [Plant] = []
+    _plants: [Plant]
     _logger: logging.Logger
 
     @property
@@ -53,6 +53,7 @@ class Environment(object):
         """
         self.config = config
         self.name = self.config.env_name
+        self._plants = []
         self._logger = self.config.logger.getChild('Environment')
         self._logger.setLevel(logging.DEBUG if self.config.debug else logging.INFO)
 

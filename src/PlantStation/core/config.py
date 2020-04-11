@@ -19,8 +19,8 @@ class Config(object):
     """
 
     _path: Path
-    _cfg_parser = configparser.RawConfigParser()
-    _cfg_lock = RLock()
+    _cfg_parser : configparser.RawConfigParser
+    _cfg_lock : RLock
     _logger: logging.Logger
 
     def __init__(self, logger: logging.Logger, path: Path, dry_run=False):
@@ -36,6 +36,8 @@ class Config(object):
         dry_run : boolean = False
             should all IO operations be mocked?
         """
+        self._cfg_lock = RLock()
+        self._cfg_parser = configparser.RawConfigParser()
         self._cfg_parser.optionxform = str
         self._logger = logger
         self._path = path
@@ -122,7 +124,7 @@ class EnvironmentConfig(Config):
     """
     _dry_run = False
     _env_name: str
-    _debug: bool
+    debug: bool
     pin_manager: PinManager
 
     def __init__(self, env_name: str, path=None, debug=False, dry_run: bool = False):
@@ -198,8 +200,8 @@ class EnvironmentConfig(Config):
         Returns list of all plants' names specified in config
         """
         sections = self.cfg_parser.sections()
-        sections.remove('DEFAULT')
-        sections.remove('GLOBAL')
+        if 'GLOBAL' in sections:
+            sections.remove('GLOBAL')
         return sections
 
     def add_plant(self, plant):
