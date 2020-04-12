@@ -2,9 +2,10 @@ import os
 import mock as mock
 
 from PlantStation.configurer.Configure import EnvironmentCreator
+from tests.configure.configure_ans import configureAnswers
 
-input_config01 = {'envName': 'test01', 'cfg_location': 'Current location', 'workingHours': False, 'ActiveLimit': 1,
-                  'working': True, 'plantName': 'Pan Aloes', 'wateringDuration': 10, 'wateringInterval': '10D 01:01:01'}
+# input_config01 = {'envName': 'test01', 'cfg_location': 'Current location', 'workingHours': False, 'ActiveLimit': 1,
+#                   'working': True, 'plantName': 'Pan Aloes', 'wateringDuration': 10, 'wateringInterval': '10D 01:01:01'}
 
 input_config02 = {'envName': 'test02', 'cfg_location': 'Current location', 'workingHours': True, 'ActiveLimit': 2,
                   'working': True, 'plantName': 'Grubson', 'wateringDuration': 15, 'wateringInterval': ' 03:00:21',
@@ -21,8 +22,11 @@ input_config02 = {'envName': 'test02', 'cfg_location': 'Current location', 'work
 
 
 @mock.patch('builtins.open', create=True)
-@mock.patch('PlantStation.configurer.Configure.prompt', return_value=input_config01)
+@mock.patch('PlantStation.configurer.Configure.prompt')
 def test_env_config(mock_input, mock_write):
+    input_config01 = configureAnswers('test01', 'Current location', False, 1, True, 'Pan Aloes', 10,
+                                      '10D 01:01:01').__dict__
+    mock_input.return_value = input_config01
     cwd = os.getcwd()
     expected_config_file = [cwd + '/test01.cfg', '[GLOBAL]\n',
                             'env_name = test01\n', 'workingHours = False\n', 'ActiveLimit = 1\n', '\n', '[Pan Aloes]\n',
