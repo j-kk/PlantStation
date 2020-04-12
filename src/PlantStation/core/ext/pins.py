@@ -1,6 +1,7 @@
-from threading import Semaphore, Lock, Condition
-from gpiozero.pins import mock, native, local
+from threading import Lock, Condition
+
 from gpiozero import DigitalOutputDevice
+from gpiozero.pins import mock, native, local
 
 DEFAULT_ACTIVE_LIMIT = 1
 
@@ -34,7 +35,7 @@ class PinManager(object):
 
     _active_limit : int
     _working_pumps = 0
-    _pump_lock = Lock()
+    _pump_lock: Lock
     _wait_for_pump: Condition
     _devices = []
 
@@ -44,7 +45,8 @@ class PinManager(object):
         # create pin factory
         self._pin_factory = native.NativeFactory() if not dry_run else mock.MockFactory()
 
-        # create condition
+        # create lock & condition
+        self._pump_lock = Lock()
         self._wait_for_pump = Condition(self._pump_lock)
 
     @property

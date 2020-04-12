@@ -19,11 +19,11 @@ class EnvironmentCreator(object):
         Specification of environment file configuration creation
     """
     env_name: str
-    dry_run: bool = False
+    dry_run: bool
     config: EnvironmentConfig
 
-    def __init__(self, mock=False, dry_run=False):
-        self.mock = mock
+    def __init__(self, debug=False, dry_run=False):
+        self.debug = debug
         self.dry_run = dry_run
         # Get general data like config name & location
         questions = [
@@ -58,7 +58,7 @@ class EnvironmentCreator(object):
         answers = prompt(questions)
         self.env_name = answers['envName']
         self.workingHours = str(answers['workingHours'])
-        self.config = EnvironmentConfig(self.env_name)
+        self.config = EnvironmentConfig(self.env_name, debug=self.debug, dry_run=self.dry_run)
         self.config.active_limit = answers['ActiveLimit']
 
         # Generate paths to config destinations
