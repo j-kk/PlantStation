@@ -74,7 +74,7 @@ class EnvironmentCreator(object):
                 }
             ]
             answers = prompt(questions)
-            paths = [answers['cfg_path'].joinpath(Path(self.env_name + '.cfg')), local_path]
+            paths = [Path(answers['cfg_path']).joinpath(Path(self.env_name + '.cfg')), local_path]
         elif answers['cfg_location'] == 'System location':
             paths = [GLOBAL_CFG_PATH.joinpath(Path(self.env_name + '.cfg')), local_path]
         elif answers['cfg_location'] == 'Default user location (recommended)':
