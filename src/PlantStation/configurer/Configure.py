@@ -107,7 +107,7 @@ class EnvironmentCreator(object):
             answers = prompt(questions)
             self.config['GLOBAL']['workingHoursBegin'] = (answers['workingHoursBegin'], answers['workingHoursEnd'])
 
-        if self.mock:
+        if self.dry_run:
             Device.pin_factory = pins.mock.MockFactory()
             self.dry_run = True
         else:
@@ -143,8 +143,8 @@ class EnvironmentCreator(object):
 
         answers = prompt(questions)
         plant = Plant(answers['plantName'], self.config, gpioPinNumber='GPIO' + str(pin_number),
-                      wateringDuration=answers['wateringDuration'], wateringInterval=answers['wateringInterval'],
-                      isActive=True)
+                      wateringDuration=datetime.timedelta(seconds=int(answers['wateringDuration'])),
+                      wateringInterval=parse_time(answers['wateringInterval']))
         self.config.update_plant_section(plant)
 
     def _check_pin(self, pin_number: int) -> bool:
