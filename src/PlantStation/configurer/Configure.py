@@ -105,7 +105,8 @@ class EnvironmentCreator(object):
                 }
             ]
             answers = prompt(questions)
-            self.config['GLOBAL']['workingHoursBegin'] = (answers['workingHoursBegin'], answers['workingHoursEnd'])
+            self.config.silent_hours = (datetime.time.fromisoformat(answers['workingHoursEnd']),
+                                        datetime.time.fromisoformat(answers['workingHoursBegin']))
 
         if self.dry_run:
             Device.pin_factory = pins.mock.MockFactory()
@@ -145,7 +146,7 @@ class EnvironmentCreator(object):
         plant = Plant(answers['plantName'], self.config, gpioPinNumber='GPIO' + str(pin_number),
                       wateringDuration=datetime.timedelta(seconds=int(answers['wateringDuration'])),
                       wateringInterval=parse_time(answers['wateringInterval']))
-        self.config.update_plant_section(plant)
+        del plant  # plant is saved, so pin can be freed
 
     def _check_pin(self, pin_number: int) -> bool:
         try:

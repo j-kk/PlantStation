@@ -91,6 +91,9 @@ class Plant(object):
             f'Creating successful. Last time watered: {self._lastTimeWatered}. Interval: {self._wateringInterval}. '
             f'Pin: {self._gpioPinNumber}')
 
+    def __del__(self):
+        self._pumpSwitch.close()
+
     def __dir__(self):
         packed = [
             'plantName',
