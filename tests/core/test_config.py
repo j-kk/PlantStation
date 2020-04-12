@@ -106,6 +106,8 @@ class TestEnvironmentConfig(ConfigSchema):
         config.silent_hours = (datetime.time(22, 00), datetime.time(7, 00))
         assert isinstance(config.silent_hours[0], datetime.time)
         assert isinstance(config.silent_hours[1], datetime.time)
+        config.active_limit = 2
+        assert config.active_limit == 2
 
     def test_too_many_plants(self):
         with pytest.raises(gpiozero.exc.PinInvalidPin):
