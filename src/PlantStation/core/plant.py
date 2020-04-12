@@ -61,10 +61,16 @@ class Plant(object):
             lastTimeWatered (datetime): When plant was watered last time?
         """
         # Check if data is correct
+        if None in [plantName, envConfig, gpioPinNumber, wateringDuration, wateringInterval]:
+            raise KeyError()
+        if plantName == '':
+            raise ValueError()
         if datetime.now() < lastTimeWatered:
             raise ValueError('Last time watered is in future')
-        if not timedelta() < wateringDuration:
+        if wateringDuration <= timedelta():
             raise ValueError("Watering duration is negative or equal to 0")
+        if wateringInterval <= timedelta():
+            raise ValueError("Watering interval is negative or equal to 0")
         if not is_gpio(gpioPinNumber):
             raise ValueError('Wrong GPIO value')
 
@@ -82,7 +88,8 @@ class Plant(object):
         self.isActive = isActive
 
         self._envConfig.logger.debug(
-            f'{self._plantName}: Creating successful. Last time watered: {self._lastTimeWatered}. Interval: {self._wateringInterval}. Pin: {self._gpioPinNumber}')
+            f'Creating successful. Last time watered: {self._lastTimeWatered}. Interval: {self._wateringInterval}. '
+            f'Pin: {self._gpioPinNumber}')
 
     def __dir__(self):
         packed = [
@@ -191,6 +198,9 @@ class Plant(object):
     def relatedTask(self, value):
         with self._infoLock:
             self._relatedTask = value
+
+    def delete(self):  # TODO
+        pass
 
     def water(self) -> None:
         """

@@ -9,7 +9,7 @@ import pytest
 import PlantStation
 from core.config import Config, EnvironmentConfig
 # noinspection PyUnresolvedReferences
-from .context import create_plant, cleanup
+from .context import create_plant_simple, cleanup
 
 
 class ConfigSchema:
@@ -75,12 +75,12 @@ class TestEnvironmentConfig(ConfigSchema):
     def config_creator(self, path=None) -> Config:
         return EnvironmentConfig('test_env', path=path, debug=True, dry_run=True)
 
-    @pytest.fixture(params=[0, 10])
+    @pytest.fixture(params=[0, 1, 10, 20])
     def multiple_config_creator(self, request):
         env_config = EnvironmentConfig('test_env', path=None, debug=True, dry_run=True)
         assert 0 <= request.param
         for pin in range(4, 4 + request.param):
-            plant = create_plant(env_config, pin)
+            plant = create_plant_simple(env_config, pin)
             env_config.update_plant_section(plant)
 
         assert len(env_config.list_plants()) == request.param
@@ -90,8 +90,7 @@ class TestEnvironmentConfig(ConfigSchema):
         env_config = EnvironmentConfig('test_env', path=path, debug=True, dry_run=True)
         assert 0 <= n_plants
         for pin in range(4, 4 + n_plants):
-            plant = create_plant(env_config, pin)
-            env_config.update_plant_section(plant)
+            plant = create_plant_simple(env_config, pin)
         return env_config
 
     def test_simple_config(self, multiple_config_creator):
@@ -115,10 +114,9 @@ class TestEnvironmentConfig(ConfigSchema):
     def test_the_same_pin(self):
         config = self.config_creator_plants(0)
         with pytest.raises(gpiozero.exc.GPIOPinInUse):
-            plant = create_plant(config, 5)
-            config.update_plant_section(plant)
-            plant = create_plant(config, 5)
-            config.update_plant_section(plant)
+            plant = create_plant_simple(config, 5)
+            assert plant.gpioPinNumber == 'GPIO5'
+            plant = create_plant_simple(config, 5)
 
     def test_config_with_plants(self):
         config = self.config_creator_plants(10)
