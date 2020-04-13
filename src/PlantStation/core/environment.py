@@ -61,3 +61,6 @@ class Environment(object):
         for params in self.config.parse_plants():
             self._plants.append(Plant(envConfig=self.config, **params))
 
+    def __del__(self):
+        for plant in self._plants:
+            del plant

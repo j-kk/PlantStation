@@ -5,8 +5,8 @@ import shutil
 from pathlib import Path
 from threading import RLock
 
-from .ext.pins import PinManager
-from .helpers.format_validators import parse_time
+from . import parse_time
+from .ext import PinManager
 
 DEFAULT_ACTIVE_LIMIT = 1
 
@@ -170,7 +170,7 @@ class EnvironmentConfig(Config):
             if self.cfg_parser['GLOBAL']['workingHours'] == 'True':
                 begin = datetime.time.fromisoformat(self.cfg_parser['GLOBAL']['workingHoursBegin'])
                 end = datetime.time.fromisoformat(self.cfg_parser['GLOBAL']['workingHoursEnd'])
-                return [begin, end]
+                return [end, begin]
             else:
                 return None
         except KeyError as exc:
@@ -189,6 +189,8 @@ class EnvironmentConfig(Config):
     def silent_hours(self, value: (datetime.time, datetime.time)):
         value = list(map(lambda t: t.strftime('%H:%M'), value))
         with self._cfg_lock:
+            if 'GLOBAL' not in self.cfg_parser:
+                self.cfg_parser['GLOBAL'] = {}
             self.cfg_parser['GLOBAL']['workingHours'] = str(True)
             self.cfg_parser['GLOBAL']['workingHoursBegin'] = value[1]
             self.cfg_parser['GLOBAL']['workingHoursEnd'] = value[0]
@@ -247,8 +249,8 @@ class EnvironmentConfig(Config):
                     params = {
                         'plantName': str(section),
                         'wateringDuration': datetime.timedelta(
-                            seconds=int(self._cfg_parser[section]['wateringDuration'])),
-                        'wateringInterval': parse_time(time_str=self._cfg_parser[section]['wateringInterval']),
+                            seconds=float(self._cfg_parser[section]['wateringDuration'])),
+                        'wateringInterval': parse_time(self._cfg_parser[section]['wateringInterval']),
                         'gpioPinNumber': str(self._cfg_parser[section]['gpioPinNumber'])}
                     if self._cfg_parser[section]['lastTimeWatered'] != '':
                         time_str = self._cfg_parser[section]['lastTimeWatered']

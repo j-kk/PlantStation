@@ -21,7 +21,7 @@ def test_env_config(mock_input, mock_write):
     input_config_dict = {k: v for k, v in input_config_dict_with_none.items() if v is not None}
     mock_input.return_value = input_config_dict
     expected_calls = input_config.expected_output01(last_time_watered='0001-01-01 00:00:00',
-                                                    water_interval='10 days, 1:01:01', water_dur='0:00:10')
+                                                    water_interval='10D 01:01:01', water_dur='10')
     EnvironmentCreator(dry_run=True)
     calls_args = [str(call.args[0]).strip('\n') for call in mock_write.mock_calls if call.args[0] != '\n']
     for call, expected_call in zip(calls_args, expected_calls):
@@ -37,7 +37,7 @@ def test_env_config_with_working_hours(mock_input, mock_write):
     EnvironmentCreator(dry_run=True)
     calls_args = [str(call.args[0]).strip('\n') for call in mock_write.mock_calls if call.args[0] != '\n']
     expected_calls = input_config.expected_output02(last_time_watered='0001-01-01 00:00:00',
-                                                    water_interval='3:00:21', water_dur='0:00:15')
+                                                    water_interval='0D 03:00:21', water_dur='15')
     for call, expected_call in zip(calls_args, expected_calls):
         assert call == expected_call
 
@@ -64,7 +64,7 @@ def test_configure_path_specify(mock_input, mock_write):
     mock_input.return_value = input_config.__dict__
     calls_args = [str(call.args[0]).strip('\n') for call in mock_write.mock_calls if call.args[0] != '\n']
     expected_calls = input_config.expected_output02(last_time_watered='0001-01-01 00:00:00',
-                                                    water_interval='5D 0:00:00', water_dur='0:00:04')
+                                                    water_interval='5D 0:00:00', water_dur='4')
     for call, expected_call in zip(calls_args, expected_calls):
         assert call == expected_call
     EnvironmentCreator(dry_run=True)
