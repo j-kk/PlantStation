@@ -251,7 +251,8 @@ class EnvironmentConfig(Config):
                         'wateringDuration': datetime.timedelta(
                             seconds=float(self._cfg_parser[section]['wateringDuration'])),
                         'wateringInterval': parse_time(self._cfg_parser[section]['wateringInterval']),
-                        'gpioPinNumber': str(self._cfg_parser[section]['gpioPinNumber'])}
+                        'gpioPinNumber': str(self._cfg_parser[section]['gpioPinNumber']),
+                        'isActive': bool(self._cfg_parser[section]['isActive'])}
                     if self._cfg_parser[section]['lastTimeWatered'] != '':
                         time_str = self._cfg_parser[section]['lastTimeWatered']
                         params['lastTimeWatered'] = datetime.datetime.strptime(time_str, '%Y-%m-%d %X')

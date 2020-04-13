@@ -1,8 +1,8 @@
-import threading
 import datetime
+import queue
+import threading
 from threading import Condition, RLock
 from typing import Callable
-import queue
 
 
 class Event(object):
@@ -51,11 +51,18 @@ class MultithreadSched(object):
     Priority is skipped, because tasks are executed independently
 
     """
-    running: bool = False
-    _lock = RLock()
-    _new_job = Condition(_lock)
-    _threads: [threading.Thread] = []
-    _queue = queue.PriorityQueue()
+    running: bool
+    _lock: RLock
+    _new_job: Condition
+    _threads: [threading.Thread]
+    _queue: queue.PriorityQueue
+
+    def __init__(self):
+        self.running = False
+        self._lock = RLock()
+        self._new_job = Condition(self._lock)
+        self._threads = []
+        self._queue = queue.PriorityQueue()
 
     @property
     def threads(self):
@@ -146,4 +153,4 @@ class MultithreadSched(object):
                     self._new_job.wait(timeout=diff.total_seconds())
                 else:
                     thread = threading.Thread(target=event.run)
-                    thread.run()
+                    thread.start()

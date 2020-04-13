@@ -213,7 +213,7 @@ class Configurer():
         if not hasattr(self, args.command):
             print('Unrecognized command')
             parser.print_help()
-            exit(1)
+            sys.exit(1)
 
         getattr(self, args.command)()
 

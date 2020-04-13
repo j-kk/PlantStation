@@ -11,13 +11,16 @@ MAX_GPIO_NUMBER = 53
 
 PLANT_SET_COUNT = 10
 
-TIMEDELTA_SHORT = datetime.timedelta(seconds=5)
-TIMEDELTA_LONG = datetime.timedelta(seconds=15)
+TIMEDELTA_SHORT = datetime.timedelta(seconds=1)
+TIMEDELTA_LONG = datetime.timedelta(seconds=20)
 
 MORNING = datetime.time(7, 0)
 EVENING = datetime.time(22, 0)
+MIDNIGHT = datetime.time(0, 0)
 
 plants = []
+
+
 
 
 @pytest.fixture(autouse=True)
@@ -32,6 +35,16 @@ def cleanup(request):
     request.addfinalizer(clean_plants)
 
 
+@pytest.fixture()
+def silent_hour_now(monkeypatch):
+    class mydatetime(datetime.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.datetime.combine(datetime.date.today() + datetime.timedelta(days=1), MIDNIGHT)
+
+    monkeypatch.setattr(datetime, 'datetime', mydatetime)
+
+
 @pytest.fixture(params=[True, False])
 def simple_env_config(request, tmp_path):
     if not request.param:
@@ -39,6 +52,7 @@ def simple_env_config(request, tmp_path):
     else:
         tmp_path = pathlib.Path(tmp_path).joinpath(pathlib.Path('test_env.cfg'))
     return EnvironmentConfig('test_env', path=tmp_path, debug=True, dry_run=True)
+
 
 @pytest.fixture()
 def complete_env_config(request, simple_env_config):

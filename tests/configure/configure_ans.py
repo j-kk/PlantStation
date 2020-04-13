@@ -30,6 +30,7 @@ class configureAnswers:
         cwd = os.getcwd()
         expected_res = [cwd + f'/{self.envName}.cfg', '[GLOBAL]', f'env_name = {self.envName}',
                         f'ActiveLimit = {self.ActiveLimit}', f'[{self.plantName}]', 'gpioPinNumber = GPIO27',
+                        f'isActive = True',
                         f'lastTimeWatered = {last_time_watered}', f'plantName = {self.plantName}',
                         f'wateringDuration = {water_dur}', f'wateringInterval = {water_interval}']
         return expected_res
@@ -39,7 +40,8 @@ class configureAnswers:
         expected_res = [cwd + f'/{self.envName}.cfg', '[GLOBAL]', f'env_name = {self.envName}',
                         f'ActiveLimit = {self.ActiveLimit}', f'workingHours = {self.working}',
                         f'workingHoursBegin = {self.workingHoursBegin}', f'workingHoursEnd = {self.workingHoursEnd}',
-                        f'[{self.plantName}]', 'gpioPinNumber = GPIO27', f'lastTimeWatered = {last_time_watered}',
+                        f'[{self.plantName}]', 'gpioPinNumber = GPIO27',
+                        f'isActive = True', f'lastTimeWatered = {last_time_watered}',
                         f'plantName = {self.plantName}', f'wateringDuration = {water_dur}',
                         f'wateringInterval = {water_interval}']
         if 'file' in file_loc and 'System location' == file_loc['file']:

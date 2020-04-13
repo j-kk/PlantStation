@@ -101,7 +101,8 @@ class Plant(object):
             'wateringDuration',
             'wateringInterval',
             'lastTimeWatered',
-            'gpioPinNumber'
+            'gpioPinNumber',
+            'isActive'
         ]
         return packed
 

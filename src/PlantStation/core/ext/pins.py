@@ -20,10 +20,10 @@ class LimitedDigitalOutputDevice(DigitalOutputDevice):
 
     def on(self):
         self._manager.acquire_lock()
-        super(self).on()
+        super().on()
 
     def off(self):
-        super(self).off()
+        super().off()
         self._manager.release_lock()
 
 
