@@ -3,3 +3,4 @@ gpiozero==1.5.1
 lockfile==0.12.2
 PyInquirer>=1.0.3
 regex
+flask
