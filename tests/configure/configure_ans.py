@@ -34,7 +34,7 @@ class configureAnswers:
                         f'wateringDuration = {water_dur}', f'wateringInterval = {water_interval}']
         return expected_res
 
-    def expected_output02(self, last_time_watered, water_dur, water_interval):
+    def expected_output02(self, last_time_watered, water_dur, water_interval, **file_loc):
         cwd = os.getcwd()
         expected_res = [cwd + f'/{self.envName}.cfg', '[GLOBAL]', f'env_name = {self.envName}',
                         f'ActiveLimit = {self.ActiveLimit}', f'workingHours = {self.working}',
@@ -42,5 +42,7 @@ class configureAnswers:
                         f'[{self.plantName}]', 'gpioPinNumber = GPIO27', f'lastTimeWatered = {last_time_watered}',
                         f'plantName = {self.plantName}', f'wateringDuration = {water_dur}',
                         f'wateringInterval = {water_interval}']
+        if 'file' in file_loc and 'System location' == file_loc['file']:
+            expected_res[0] = '/etc/' + self.envName + '.cfg'
         return expected_res
 

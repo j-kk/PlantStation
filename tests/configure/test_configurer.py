@@ -1,5 +1,5 @@
-import argparse
 import os
+import sys
 
 import mock as mock
 import pytest
@@ -8,7 +8,9 @@ from gpiozero import GPIOZeroError
 from PlantStation.configurer.Configure import EnvironmentCreator, Configurer
 from tests.configure.configure_ans import configureAnswers
 
+
 ########################## EnvironmentCreator test
+
 
 @mock.patch('builtins.open')
 @mock.patch('PlantStation.configurer.Configure.prompt')
@@ -67,6 +69,7 @@ def test_configure_path_specify(mock_input, mock_write):
         assert call == expected_call
     EnvironmentCreator(dry_run=True)
 
+
 ########################## ServiceCreatorConfig test
 # TODO
 
@@ -78,3 +81,31 @@ def test_configurer_wrong_command():
         Configurer()
     assert pytest_wrapped_e.type == SystemExit
     assert pytest_wrapped_e.value.code == 1
+
+
+@mock.patch("PlantStation.configurer.Configure.EnvironmentCreator")
+def test_configurer_config_with_error(mock_env_creator):
+    testargs = ["PlantSetup", "config", "-m"]
+    with mock.patch.object(sys, 'argv', testargs):
+        mock_env_creator.side_effect = GPIOZeroError
+        with pytest.raises(SystemExit) as pytest_wrapped_e:
+            Configurer()
+        assert pytest_wrapped_e.type == SystemExit
+        assert pytest_wrapped_e.value.code == 1
+
+
+@mock.patch('builtins.open', create=True)
+@mock.patch('PlantStation.configurer.Configure.prompt')
+def test_configurer_config_ok(mock_input, mock_write):
+    testargs = ["PlantSetup", "config", "-m"]
+    with mock.patch.object(sys, 'argv', testargs):
+        input_config = configureAnswers('test05', 'System location', True, '2', True, 'Plant12345', '3',
+                                        '7D 00:00:00', '08:30', '16:00')
+        mock_input.return_value = input_config.__dict__
+        expected_calls = input_config.expected_output02(last_time_watered='0001-01-01 00:00:00',
+                                                        water_interval='7 days, 0:00:00', water_dur='0:00:03',
+                                                        file='System location')
+        Configurer()
+        calls_args = [str(call.args[0]).strip('\n') for call in mock_write.mock_calls if call.args[0] != '\n']
+        for call, expected_call in zip(calls_args, expected_calls):
+            assert call == expected_call

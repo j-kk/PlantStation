@@ -227,11 +227,11 @@ class Configurer():
         mock = vars(args)['mock']
 
         try:
-            EnvironmentCreator(mock=mock)
+            EnvironmentCreator(dry_run=mock)
 
             print(f'Created config')
         except Exception as exc:
-            print(f'Couldn\'t create config file. Quitting! {exc}')
+            print(f'Couldn\'t create config file. Quitting! Error: {exc.__str__()}')
             sys.exit(1)
 
     def service(self):
