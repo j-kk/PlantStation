@@ -103,7 +103,7 @@ def test_configurer_config_ok(mock_input, mock_write):
                                         '7D 00:00:00', '08:30', '16:00')
         mock_input.return_value = input_config.__dict__
         expected_calls = input_config.expected_output02(last_time_watered='0001-01-01 00:00:00',
-                                                        water_interval='7 days, 0:00:00', water_dur='0:00:03',
+                                                        water_interval='7D 00:00:00', water_dur='3',
                                                         file='System location')
         Configurer()
         calls_args = [str(call.args[0]).strip('\n') for call in mock_write.mock_calls if call.args[0] != '\n']
