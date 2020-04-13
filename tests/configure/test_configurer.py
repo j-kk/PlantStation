@@ -1,10 +1,11 @@
+import argparse
 import os
 
 import mock as mock
 import pytest
 from gpiozero import GPIOZeroError
 
-from PlantStation.configurer.Configure import EnvironmentCreator
+from PlantStation.configurer.Configure import EnvironmentCreator, Configurer
 from tests.configure.configure_ans import configureAnswers
 
 ########################## EnvironmentCreator test
@@ -69,5 +70,11 @@ def test_configure_path_specify(mock_input, mock_write):
 ########################## ServiceCreatorConfig test
 # TODO
 
+
 ########################## Configurer test
-# TODO
+
+def test_configurer_wrong_command():
+    with pytest.raises(SystemExit) as pytest_wrapped_e:
+        Configurer()
+    assert pytest_wrapped_e.type == SystemExit
+    assert pytest_wrapped_e.value.code == 1
