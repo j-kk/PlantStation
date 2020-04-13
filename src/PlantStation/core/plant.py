@@ -9,6 +9,7 @@ from typing import Callable
 from gpiozero import DigitalOutputDevice, GPIOZeroError
 
 from .config import EnvironmentConfig
+from .ext import Interval, Duration
 from .helpers.format_validators import is_gpio
 
 
@@ -35,8 +36,8 @@ class Plant(object):
         Checks if it is right time to water now, returns appropriate actions to do in kwargs (new scheduler event)
     """
     _plantName: str
-    _wateringDuration: timedelta
-    _wateringInterval: timedelta
+    _wateringDuration: Duration
+    _wateringInterval: Interval
     _lastTimeWatered: datetime
 
     _envConfig: EnvironmentConfig
@@ -80,8 +81,8 @@ class Plant(object):
 
         self._plantName = plantName
         self._lastTimeWatered: datetime.datetime = lastTimeWatered
-        self._wateringDuration = wateringDuration
-        self._wateringInterval = wateringInterval
+        self._wateringDuration = Duration.convert_to_duration(wateringDuration)
+        self._wateringInterval = Interval.convert_to_interval(wateringInterval)
 
         self._gpioPinNumber = gpioPinNumber
         self._logger = self._envConfig.logger.getChild(self._plantName)
@@ -139,7 +140,7 @@ class Plant(object):
     @_update_config
     def wateringDuration(self, value: timedelta) -> None:
         with self._infoLock:
-            self._wateringDuration = value
+            self._wateringDuration = Duration.convert_to_duration(value)
 
     @property
     def wateringInterval(self) -> timedelta:
@@ -153,7 +154,7 @@ class Plant(object):
     @_update_config
     def wateringInterval(self, value: timedelta):
         with self._infoLock:
-            self.wateringInterval = value
+            self.wateringInterval = Interval.convert_to_interval(value)
 
     @property
     def lastTimeWatered(self) -> datetime:
@@ -201,9 +202,6 @@ class Plant(object):
     def relatedTask(self, value):
         with self._infoLock:
             self._relatedTask = value
-
-    def delete(self):  # TODO
-        pass
 
     def water(self) -> None:
         """

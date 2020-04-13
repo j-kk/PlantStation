@@ -227,7 +227,7 @@ class Configurer():
         mock = vars(args)['mock']
 
         try:
-            EnvironmentCreator(mock=mock)
+            EnvironmentCreator(dry_run=mock)
 
             print(f'Created config')
         except Exception as exc:
