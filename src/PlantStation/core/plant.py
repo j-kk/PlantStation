@@ -10,6 +10,7 @@ from gpiozero import DigitalOutputDevice, GPIOZeroError
 
 from .config import EnvironmentConfig
 from .ext import Interval, Duration
+from .ext.pins import LimitedDigitalOutputDevice
 from .helpers.format_validators import is_gpio
 
 
@@ -43,7 +44,7 @@ class Plant(object):
     _envConfig: EnvironmentConfig
     _logger: logging.Logger
     _gpioPinNumber: str
-    _pumpSwitch: DigitalOutputDevice
+    _pumpSwitch: LimitedDigitalOutputDevice
     _relatedTask = None
     _isActive = False
 
@@ -86,6 +87,7 @@ class Plant(object):
 
         self._gpioPinNumber = gpioPinNumber
         self._logger = self._envConfig.logger.getChild(self._plantName)
+        #activates pump
         self.isActive = isActive
 
         self._envConfig.logger.debug(
@@ -204,7 +206,7 @@ class Plant(object):
         with self._infoLock:
             self._relatedTask = value
 
-    def water(self) -> None:
+    def water(self, force=False) -> None:
         """
             Waters plant. Obtains pump lock (EnvironmentConfig specifies max number of simultanously working pumps).
             Blocks thread until plant is watered
@@ -212,7 +214,7 @@ class Plant(object):
         if self.isActive:
             try:
                 self._logger.info(f'{self._plantName}: Started watering')
-                self._pumpSwitch.on()
+                self._pumpSwitch.on(force)
                 time.sleep(self.wateringDuration.total_seconds())
             except GPIOZeroError as exc:
                 self._logger.error(f'{self._plantName}: GPIO error')
@@ -237,6 +239,8 @@ class Plant(object):
         else:
             self._logger.info("%s: Give me some time, water me later", self._plantName)
             return False
+
+
 
     def calc_next_watering(self) -> datetime:
         """Calculate next watering date

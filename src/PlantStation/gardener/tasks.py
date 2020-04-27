@@ -4,7 +4,7 @@ import threading
 from threading import Lock
 from typing import Callable
 
-from PlantStation.core.ext import MultithreadSched
+from PlantStation.core.ext import MultithreadSched, SilentHoursException
 from PlantStation.core import plant, EnvironmentConfig
 
 
@@ -148,28 +148,16 @@ class WaterTask(Task):
         :return: ShouldWaterTask or postponed waterOn task
         """
         self.logger.info(f'Starting to water plant {self.plant.plantName}')
-        if self.env_config.silent_hours:
-            if self.env_config['workingHoursBegin'] <= datetime.datetime.now().time() < self.env_config[
-                'workingHoursEnd']:
-                self.logger.debug(f'WaterOn: watering plant')
-                self.plant.water()
-                self.env_config[self.plant.plantName]['lastTimeWatered'] = datetime.datetime.now().strftime(
-                    '%Y-%m-%d %X')
-                self.env_config.write()
-                return ShouldWaterTask(self.plant, env_config=self.env_config)
-            else:
-                # postpone
-                self.logger.debug(f'WaterOn: Postponing waterOn')
-                next_working_window = datetime.datetime.combine(datetime.datetime.now().date(),
-                                                                self.env_config['workingHoursBegin'])
-                if next_working_window < datetime.datetime.now():
-                    next_working_window += datetime.timedelta(days=1)
-                diff = next_working_window - datetime.datetime.now()
-                return WaterTask(self.plant, env_config=self.env_config, delay=diff)
+        if dt := self.env_config.pin_manager.calc_working_hours() is not None:
+            self.logger.info(f'Water: postponing watering {datetime.datetime.now()}')
+            return ShouldWaterTask(self.plant, env_config=self.env_config, delay=dt)
         else:
-            self.logger.debug(f'WaterOn: watering plant')
-            self.plant.water()
-            self.env_config[self.plant.plantName]['lastTimeWatered'] = datetime.datetime.now().strftime(
-                '%Y-%m-%d %X')
-            self.env_config.write()
-            return ShouldWaterTask(self.plant, env_config=self.env_config)
+            self.logger.debug(f'Watering plant')
+            try:
+                self.plant.water()
+                return ShouldWaterTask(self.plant, env_config=self.env_config)
+            except SilentHoursException:
+                dt = self.env_config.pin_manager.calc_working_hours()
+                self.logger.info(f'Water: postponing watering {datetime.datetime.now()}')
+                return ShouldWaterTask(self.plant, env_config=self.env_config, delay=dt)
+                
