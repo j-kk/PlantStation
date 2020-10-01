@@ -10,25 +10,10 @@ class Environment(object):
     all the actions, as based in environment.cfg file.
 
     Attributes:
-    -----------
+        config (:obj:`EnvironmentConfig`): Environment config
 
-    config  : environment config
-        Environment config
-
-    plants : [Plant]
-        list of plants
-
-    Methods:
-    --------
-
-    read_config()
-        Reads environment config file
-
-    schedule_monitoring()
-        Sets up event scheduler - Obligatory before starting event scheduler
-
-    start()
-        Starts to look after plants - starting event scheduler
+    Attributes:
+        config (:obj:`EnvironmentConfig`): Environment config
 
     """
     config: EnvironmentConfig
@@ -36,21 +21,11 @@ class Environment(object):
     _logger: logging.Logger
 
     @property
-    def plants(self):
+    def plants(self) -> [Plant]:
+        """List of plants"""
         return self._plants
 
     def __init__(self, config: EnvironmentConfig):
-        """
-        Args:
-            config_path: Config property (used to read values and update)
-
-            env_name (str): name of the environment
-
-            active_limit (int): max number of active pumps at once
-
-            dry_run (boolean): should pumps be active?
-
-        """
         self.config = config
         self.name = self.config.env_name
         self._plants = []
@@ -61,6 +36,3 @@ class Environment(object):
         for params in self.config.parse_plants():
             self._plants.append(Plant(envConfig=self.config, **params))
 
-    def __del__(self):
-        for plant in self._plants:
-            del plant

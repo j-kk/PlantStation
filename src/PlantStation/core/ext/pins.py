@@ -123,7 +123,7 @@ class PinManager(object):
                 return datetime.combine(date.today(), self.working_hours[0]) - datetime.now()
             if self.working_hours[1] <= datetime.now().time():
                 return datetime.combine(date.today() + timedelta(days=1), self.working_hours[1]) - datetime.now()
-        return None
+        return timedelta(0)
 
     def acquire_lock(self):
         """

@@ -1,3 +1,5 @@
+import abc
+import asyncio
 import datetime
 import logging
 import threading
@@ -77,7 +79,7 @@ class TaskPool(object):
         self.add_task(new_task)
 
 
-class Task(object):
+class Task(abc.ABC):
     """
         Schedulable task
 
@@ -88,7 +90,6 @@ class Task(object):
         function to be executed
 
     """
-    func: Callable
     delay: datetime.timedelta
     env_config: EnvironmentConfig
     logger: logging.Logger
@@ -99,8 +100,12 @@ class Task(object):
         self.env_config = env_config
         self.logger = self.env_config.logger.getChild('Task')
 
-    def run(self):
-        pass
+    async def wait(self):
+        await asyncio.sleep(self.delay.total_seconds())
+
+    @abc.abstractmethod
+    async def run(self):
+        raise NotImplementedError()
 
 
 class ShouldWaterTask(Task):
@@ -113,7 +118,7 @@ class ShouldWaterTask(Task):
         self.plant = plant
         super().__init__(delay=delay, action=self.run, env_config=env_config)
 
-    def run(self) -> Task:
+    async def run(self) -> Task:
         """Check if plants need to be watered
 
             if so -> create watering task
@@ -141,14 +146,16 @@ class WaterTask(Task):
         self.plant = plant
         super().__init__(delay=delay, action=self.run, env_config=env_config)
 
-    def run(self) -> Task:
+    async def run(self) :
         """
             Waters plants if there are working hours
             otherwise postpones it
         :return: ShouldWaterTask or postponed waterOn task
         """
         self.logger.info(f'Starting to water plant {self.plant.plantName}')
-        if dt := self.env_config.pin_manager.calc_working_hours() is not None:
+        dt = self.env_config.pin_manager.calc_working_hours()
+        await asyncio
+        if dt is not None:
             self.logger.info(f'Water: postponing watering {datetime.datetime.now()}')
             return ShouldWaterTask(self.plant, env_config=self.env_config, delay=dt)
         else:
