@@ -22,6 +22,7 @@ class Interval(datetime.timedelta):
                 kwargs[arg] = getattr(obj, arg)
         return cls(**kwargs)
 
+
 class Duration(datetime.timedelta):
 
     def __new__(cls, *args, **kwargs):
@@ -38,4 +39,3 @@ class Duration(datetime.timedelta):
             if arg not in ['max', 'min', 'resolution', 'total_seconds']:
                 kwargs[arg] = getattr(obj, arg)
         return cls(**kwargs)
-

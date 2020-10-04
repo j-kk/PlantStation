@@ -6,7 +6,7 @@ from pathlib import Path
 from threading import RLock
 
 from . import parse_time
-from .ext import PinManager
+from .ext import PinManager, EventLoop
 
 DEFAULT_ACTIVE_LIMIT = 1
 
@@ -125,6 +125,7 @@ class EnvironmentConfig(Config):
     """
     _dry_run = False
     _env_name: str
+    _env_loop: EventLoop
     debug: bool
     pin_manager: PinManager
 
@@ -185,6 +186,7 @@ class EnvironmentConfig(Config):
             self.logger.info(f'Disabled silent hours')
             self.cfg_parser['GLOBAL']['workingHours'] = str(False)
 
+
     @silent_hours.setter
     def silent_hours(self, value: (datetime.time, datetime.time)):
         value = list(map(lambda t: t.strftime('%H:%M'), value))
@@ -194,6 +196,10 @@ class EnvironmentConfig(Config):
             self.cfg_parser['GLOBAL']['workingHours'] = str(True)
             self.cfg_parser['GLOBAL']['workingHoursBegin'] = value[1]
             self.cfg_parser['GLOBAL']['workingHoursEnd'] = value[0]
+
+    @property
+    def env_loop(self) -> EventLoop:
+        return self._env_loop
 
     @property
     def active_limit(self):

@@ -12,9 +12,6 @@ class Environment(object):
     Attributes:
         config (:obj:`EnvironmentConfig`): Environment config
 
-    Attributes:
-        config (:obj:`EnvironmentConfig`): Environment config
-
     """
     config: EnvironmentConfig
     _plants: [Plant]

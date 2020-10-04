@@ -4,7 +4,8 @@ import sys
 from pathlib import Path
 
 from PlantStation.Configure import GLOBAL_CFG_PATH, USER_CFG_PATH
-from PlantStation.Environment import Environment
+from PlantStation.core.environment import Environment
+from PlantStation.core.config import EnvironmentConfig
 
 
 class App(object):

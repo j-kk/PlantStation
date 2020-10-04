@@ -14,6 +14,10 @@ class EventLoop(Thread):
         Thread.__init__(self)
         self._loop = asyncio.new_event_loop()
 
+    @property
+    def async_loop(self):
+        return self._loop
+
     def run(self) -> None:
         """Implementation of Thread run() method. Runs event loop"""
         asyncio.set_event_loop(self._loop)
@@ -34,3 +38,4 @@ class EventLoop(Thread):
     def cancel_task(self, task: Future) -> None:
         """Cancels task execution"""
         self._loop.call_soon_threadsafe(task.cancel)
+
