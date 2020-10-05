@@ -4,9 +4,9 @@ import logging
 import shutil
 from pathlib import Path
 from threading import RLock
+from typing import Tuple, List
 
 from . import parse_time
-from .ext import PinManager, EventLoop
 
 DEFAULT_ACTIVE_LIMIT = 1
 
@@ -17,8 +17,8 @@ class Config(object):
     """
 
     _path: Path = None
-    _cfg_parser : configparser.RawConfigParser
-    _cfg_lock : RLock
+    _cfg_parser: configparser.RawConfigParser
+    _cfg_lock: RLock
     _logger: logging.Logger
 
     def __init__(self, logger: logging.Logger, path: Path, dry_run=False):
@@ -74,7 +74,6 @@ class Config(object):
             else:
                 return self._path
 
-
     @path.setter
     def path(self, value: Path):
         with self._cfg_lock:
@@ -122,34 +121,29 @@ class EnvironmentConfig(Config):
     """
         Configuration intended for general use. Stores information about GPIO,
         creates global logger
+
+        Args:
+            - env_name (str): Environment name
+            - path (pathlib.Path): Path to the config file
+            - debug (bool): Show debug data
+            - dry_run (bool): Simulate operations on pins
     """
-    _dry_run = False
+    _dry_run: bool
     _env_name: str
-    _env_loop: EventLoop
-    debug: bool
-    pin_manager: PinManager
+    _debug: bool
 
-    def __init__(self, env_name: str, path=None, debug=False, dry_run: bool = False):
-        """
-        Default constructor. Uses program's logger
-
-        Parameters:
-        -----------
-
-        path : pathlib.Path
-            path to config
-        debug : bool = False
-            print extra debug information
-        dry_run : bool = False
-            should pins be mocked?
-        """
+    def __init__(self,
+                 env_name: str,
+                 path: Path = None,
+                 debug: bool = False,
+                 dry_run: bool = False):
         # set env vars
-        self.env_name = env_name
-        self.debug = debug
-        self.dry_run = dry_run
+        self._env_name = env_name
+        self._debug = debug
+        self._dry_run = dry_run
 
         # create global logger
-        logger = logging.getLogger('PlantStation').getChild(self.env_name)
+        logger = logging.getLogger('PlantStation').getChild(self._env_name)
         Formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         channel = logging.StreamHandler()
         channel.setFormatter(Formatter)
@@ -160,20 +154,17 @@ class EnvironmentConfig(Config):
         super().__init__(logger, path)
         if path is None:
             self.cfg_parser['GLOBAL'] = {
-                'env_name': self.env_name
+                'env_name': self._env_name
             }
-        # initialize pins
-        self.pin_manager = PinManager(dry_run=dry_run)
 
     @property
-    def silent_hours(self):
+    def silent_hours(self) -> Tuple[datetime.time, datetime.time]:
+        """Silent hours working hours in tuple: (end, begin)"""
         try:
-            if self.cfg_parser['GLOBAL']['workingHours'] == 'True':
+            with self._cfg_lock:
                 begin = datetime.time.fromisoformat(self.cfg_parser['GLOBAL']['workingHoursBegin'])
                 end = datetime.time.fromisoformat(self.cfg_parser['GLOBAL']['workingHoursEnd'])
-                return [end, begin]
-            else:
-                return None
+                return end, begin
         except KeyError as exc:
             self.logger.error(f'Silent hours not given!')
             raise exc
@@ -181,49 +172,74 @@ class EnvironmentConfig(Config):
             self.logger.fatal(f'Silent hours in wrong format {exc}!')
             raise exc
 
-    def disable_silent_hours(self):
-        with self._cfg_lock:
-            self.logger.info(f'Disabled silent hours')
-            self.cfg_parser['GLOBAL']['workingHours'] = str(False)
-
-
     @silent_hours.setter
-    def silent_hours(self, value: (datetime.time, datetime.time)):
+    def silent_hours(self, value: Tuple[datetime.time, datetime.time]) -> None:
         value = list(map(lambda t: t.strftime('%H:%M'), value))
         with self._cfg_lock:
             if 'GLOBAL' not in self.cfg_parser:
                 self.cfg_parser['GLOBAL'] = {}
-            self.cfg_parser['GLOBAL']['workingHours'] = str(True)
             self.cfg_parser['GLOBAL']['workingHoursBegin'] = value[1]
             self.cfg_parser['GLOBAL']['workingHoursEnd'] = value[0]
 
     @property
-    def env_loop(self) -> EventLoop:
-        return self._env_loop
+    def debug(self) -> bool:
+        """Is debug mode"""
+        return self._debug
 
     @property
-    def active_limit(self):
+    def dry_run(self):
+        """Is dry run"""
+        return self._dry_run
+
+    @property
+    def env_name(self) -> str:
+        """Env name"""
+        with self._cfg_lock:
+            return self._env_name
+
+    @property
+    def silent_hours_state(self) -> bool:
+        """State of the silent hours (enabled/disabled)"""
+        with self._cfg_lock:
+            return self.cfg_parser['GLOBAL']['workingHours'] == 'True'
+
+    @silent_hours_state.setter
+    def silent_hours_state(self, value: bool) -> None:
+        with self._cfg_lock:
+            self.logger.info(f'Setting silent hours state to {str(value)}')
+            self.cfg_parser['GLOBAL']['workingHours'] = str(value)
+
+    @property
+    def active_limit(self) -> int:
+        """Limit of simulatanously working active pumps"""
         try:
-            return int(self._cfg_parser['GLOBAL']['ActiveLimit'])
+            with self._cfg_lock:
+                return int(self._cfg_parser['GLOBAL']['ActiveLimit'])
         except KeyError:
+            self._cfg_parser['GLOBAL']['ActiveLimit'] = str(DEFAULT_ACTIVE_LIMIT)
             return DEFAULT_ACTIVE_LIMIT
 
     @active_limit.setter
-    def active_limit(self, value: int):
-        self.pin_manager.active_limit = value
-        self.cfg_parser['GLOBAL']['ActiveLimit'] = str(value)
-        self.logger.debug(f'Active limit set to {value}')
+    def active_limit(self, value: int) -> None:
+        with self._cfg_lock:
+            self.cfg_parser['GLOBAL']['ActiveLimit'] = str(value)
+            self.logger.debug(f'Active limit set to {value}')
 
-    def list_plants(self) -> [str]:
-        """
-        Returns list of all plants' names specified in config
-        """
-        sections = self.cfg_parser.sections()
-        if 'GLOBAL' in sections:
-            sections.remove('GLOBAL')
-        return sections
+    def list_plants(self) -> List[str]:
+        """Returns list of all plants' names specified in config"""
+        with self._cfg_lock:
+            sections = self.cfg_parser.sections()
+            if 'GLOBAL' in sections:
+                sections.remove('GLOBAL')
+            return sections
 
-    def update_plant_section(self, plant):
+    def update_plant_section(self, plant: "Plant") -> None:
+        """Updates plant section of environment
+
+        Args:
+            - plant (Plant): plant object to update
+
+        """
         section = dir(plant)
 
         with self._cfg_lock:
@@ -232,7 +248,12 @@ class EnvironmentConfig(Config):
             for key in section:
                 self.cfg_parser[plant.plantName][key] = str(getattr(plant, key))
 
-    def remove_plant_section(self, plant):
+    def remove_plant_section(self, plant: "Plant") -> None:
+        """Removes plant section from config
+
+        Args:
+            plant (Plant): plant to remove
+        """
         with self._cfg_lock:
             self.cfg_parser.remove_section(plant.plantName)
 
@@ -276,17 +297,15 @@ class EnvironmentConfig(Config):
                         f'{self._path} Failed to read {section} section {err}')
         return plant_params
 
-    @staticmethod
-    def create_from_file(path: Path, debug: bool = False, dry_run: bool = False):
-        # check path
+    @classmethod
+    def create_from_file(cls, path: Path, debug: bool = False, dry_run: bool = False):
+        """Builds env config from file"""
         if not path.exists() or not path.is_file():
             raise FileNotFoundError()
         if not path.name.endswith('.cfg'):
             raise FileExistsError('File has wrong suffix')
 
         env_name = path.name[:-4]
-        env = EnvironmentConfig(env_name, path, debug, dry_run)
+        env = cls(env_name, path, debug, dry_run)
         env.read()
-        env.pin_manager.active_limit = env.active_limit #TODO in future
         return env
-

@@ -1,24 +1,28 @@
+import pathlib
 import uuid
 
 import mock
 import pytest
 from mock import patch
 
-from config import Config
+from PlantStation.core.config import Config
 
 
 @mock.patch("logging.Logger")
 def test_read_files_empty(mock_logger):
-    with pytest.raises(FileNotFoundError):
-        config = Config(mock_logger, [])
+    with pytest.raises(ValueError):
+        config = Config(mock_logger, pathlib.Path())
+        config.read()
+    with pytest.raises(ValueError):
+        config = Config(mock_logger, pathlib.Path('.cfg'))
         config.read()
 
 
 @mock.patch("logging.Logger")
 def test_read_files_not_found(mock_logger):
-    file = uuid.uuid4().__str__()
+    file = str(uuid.uuid4()) + '.cfg'
     with pytest.raises(FileNotFoundError):
-        config = Config(mock_logger, file)
+        config = Config(mock_logger, pathlib.Path(file))
         config.read()
 
 
@@ -27,7 +31,7 @@ def test_write_all_ok(mock_logger: mock.MagicMock):
     with patch('config.Config._write_to_file') as mock_write:
         expected_res = ['test']
         mock_write.return_value = expected_res
-        config = Config(mock_logger, [])
+        config = Config(mock_logger, )
         res = config.write()
         assert res == expected_res
 

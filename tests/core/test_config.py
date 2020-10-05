@@ -78,10 +78,10 @@ class TestEnvironmentConfig(ConfigSchema):
 
     def test_simple_config(self, simple_env_config):
         config = simple_env_config
-        assert config.active_limit == config.pin_manager.active_limit
-        assert config.pin_manager.active_limit == PlantStation.core.ext.pins.DEFAULT_ACTIVE_LIMIT
-        assert config.pin_manager.working_pumps == 0
-        assert isinstance(config.pin_manager.pin_factory, gpiozero.pins.mock.MockFactory)
+        assert config.active_limit == config._pin_manager.active_limit
+        assert config._pin_manager.active_limit == PlantStation.core.ext.pins.DEFAULT_ACTIVE_LIMIT
+        assert config._pin_manager.working_pumps == 0
+        assert isinstance(config._pin_manager.pin_factory, gpiozero.pins.mock.MockFactory)
         assert config.debug
         with pytest.raises(KeyError):
             r = config.silent_hours

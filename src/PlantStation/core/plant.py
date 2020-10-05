@@ -9,8 +9,8 @@ from typing import Callable, Optional
 from gpiozero import GPIOZeroError
 
 from .config import EnvironmentConfig
-from .ext import Interval, Duration
-from .ext.pins import LimitedDigitalOutputDevice
+from .ext import Interval, Duration, EventLoop
+from .ext.pins import LimitedDigitalOutputDevice, PinManager
 from .helpers.format_validators import is_gpio
 
 
@@ -42,13 +42,13 @@ class Plant:
 
     _isActive: bool
     _waterLock: threading.Lock
-    _waterCondition: threading.Condition
-    _waterInside: int
     _relatedTask: Optional[Future]
     _watering_event: Optional[asyncio.Event]
 
     def __init__(self,
                  plantName: str,
+                 env_loop: EventLoop,
+                 pin_manager: PinManager,
                  envConfig: EnvironmentConfig,
                  gpioPinNumber: str,
                  wateringDuration: timedelta,
@@ -87,22 +87,18 @@ class Plant:
         self._lastTimeWatered: datetime = lastTimeWatered
         self._wateringDuration = Duration.convert_to_duration(wateringDuration)
         self._wateringInterval = Interval.convert_to_interval(wateringInterval)
+        self._env_loop = env_loop
 
         self._gpioPinNumber = gpioPinNumber
         self._logger = self._envConfig.logger.getChild(self._plantName)
         # activates pump
         self.isActive = isActive
-        self._pumpSwitch = self._envConfig.pin_manager.create_pump(self._gpioPinNumber)
+        self._pumpSwitch = pin_manager.create_pump(self._gpioPinNumber)
         self._waterLock = threading.Lock()
-        self._waterCondition = threading.Condition(self._waterLock)
-        self._waterInside = 0
 
-        self._envConfig.logger.debug(
+        self._logger.debug(
             f'Creating successful. Last time watered: {self._lastTimeWatered}. Interval: {self._wateringInterval}. '
             f'Pin: {self._gpioPinNumber}')
-
-    def __del__(self):
-        self._pumpSwitch.close()
 
     @property
     def plantName(self) -> str:
@@ -139,6 +135,7 @@ class Plant:
     def wateringInterval(self, value: timedelta):
         with self._infoLock:
             self.wateringInterval = Interval.convert_to_interval(value)
+            self._watering_event.set()
 
     @property
     def lastTimeWatered(self) -> datetime:
@@ -165,20 +162,17 @@ class Plant:
             if self._isActive == value:
                 return
             elif value:
-                self._relatedTask = self._envConfig.env_loop.add_task(self.plant_task_loop())
+                self._relatedTask = self._env_loop.add_task(self.plant_task_loop())
                 self._envConfig.logger.info(f'Auto watering activated')
             else:
-                self._envConfig.env_loop.cancel_task(self._relatedTask)
+                self._env_loop.cancel_task(self._relatedTask)
                 self._envConfig.logger.info(f'Auto watering deactivated')
                 self._relatedTask = None
             self._isActive = value
 
     def manual_water(self, wateringDuration: timedelta = None, force: bool = False) -> None:
         with self._waterLock:
-            self._envConfig.env_loop.add_task(self._water(wateringDuration, force)).result()
-
-
-
+            self._env_loop.add_task(self._water(wateringDuration, force)).result()
 
     async def plant_task_loop(self) -> None:
         while True:
@@ -194,7 +188,7 @@ class Plant:
                 if self.should_water():
                     await asyncio.shield(self._water())
 
-    async def _water(self, wateringDuration: timedelta = None, force: bool =False) -> None:
+    async def _water(self, wateringDuration: timedelta = None, force: bool = False) -> None:
         """Waters plant.
 
         Obtains pump lock (EnvironmentConfig specifies max number of simultanously working pumps).

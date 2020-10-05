@@ -1,9 +1,10 @@
-import string
 import datetime
+import string
 from random import Random
 
 import pytest
-from PlantStation.Plant import Plant
+
+from PlantStation.core import Plant
 
 
 def _random_string(stringLength=10):
@@ -32,13 +33,10 @@ def test_plants(seed: int):
     rnd = Random(seed)
     for x in range(10):
         pp = Plant(plantName='P' + str(x),
-                   envName="test",
                    gpioPinNumber=_generate_GPIO(True),
                    wateringDuration=dt_s * rnd.randint(1, 2),
                    wateringInterval=dt_s * rnd.randint(1, 2),
-                   lastTimeWatered=datetime.datetime.now() + dt_s * rnd.randint(-1, 0),
-                   dry_run=True)
-        pp.water_on()
+                   lastTimeWatered=datetime.datetime.now() + dt_s * rnd.randint(-1, 0))
 
 
 @pytest.mark.parametrize("seed", [x for x in range(0, 100)])

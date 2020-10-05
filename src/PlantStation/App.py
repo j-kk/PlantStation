@@ -1,32 +1,43 @@
 import argparse
 import logging
+import signal
 import sys
+import threading
 from pathlib import Path
 
-from PlantStation.Configure import GLOBAL_CFG_PATH, USER_CFG_PATH
-from PlantStation.core.environment import Environment
+from PlantStation.configurer.defaults import GLOBAL_CFG_PATH, USER_CFG_PATH
 from PlantStation.core.config import EnvironmentConfig
+from PlantStation.core.environment import Environment
 
 
 class App(object):
     _mainEnvironment: Environment
-    _config_path: str
+    _config_path: Path
     _debug: bool
     _logger = logging.getLogger(__package__)
 
-    def __init__(self, config_path: str, dry_run: bool = False, debug: bool = False):
+    __event: threading.Event
+
+    def __init__(self, config_path: Path, dry_run: bool = False, debug: bool = False):
         # get config
         self._config_path = config_path
         self._debug = debug
-        self._mainEnvironment = Environment(config_path=self._config_path, dry_run=dry_run)
 
-        self._mainEnvironment.schedule_monitoring()
+        env_config = EnvironmentConfig.create_from_file(self._config_path, debug, dry_run)
 
-    def run_env(self):
-        self._mainEnvironment.start()
+        self._mainEnvironment = Environment(env_config)
+
+        self.__event = threading.Event()
+
+        for sig in ('TERM', 'HUP', 'INT'):
+            signal.signal(getattr(signal, 'SIG' + sig), self.__event.set)
 
     def run(self):
-        self.run_env()
+        try:
+            self._mainEnvironment.start()
+            self.__event.wait()
+        finally:
+            self._mainEnvironment.stop()
 
 
 def run():
@@ -44,10 +55,7 @@ def run():
     channel.setFormatter(Formatter)
     logger.addHandler(channel)
 
-    if args.debug:
-        logger.setLevel(logging.DEBUG)
-    else:
-        logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG if args.debug else logging.INFO)
 
     logger.debug(f'Path: {args.config_path}')
 

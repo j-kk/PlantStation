@@ -16,6 +16,7 @@ class EventLoop(Thread):
 
     @property
     def async_loop(self):
+        """Async loop"""
         return self._loop
 
     def run(self) -> None:

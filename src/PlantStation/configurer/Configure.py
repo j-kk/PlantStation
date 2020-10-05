@@ -215,7 +215,12 @@ class Configurer():
             parser.print_help()
             sys.exit(1)
 
-        getattr(self, args.command)()
+        if args.command == 'config':
+            self.config()
+        elif args.command == 'service':
+            self.service()
+        else:
+            print('Unrecognized command')
 
     def config(self):
         parser = argparse.ArgumentParser(description='Create new environment configuration file')
