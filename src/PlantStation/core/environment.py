@@ -13,18 +13,13 @@ class Environment(object):
         config (:obj:`EnvironmentConfig`): Environment config
 
     """
-    config: EnvironmentConfig
+    _config: EnvironmentConfig
     _plants: [Plant]
     _logger: logging.Logger
 
-    @property
-    def plants(self) -> [Plant]:
-        """List of plants"""
-        return self._plants
-
     def __init__(self, config: EnvironmentConfig):
-        self.config = config
-        self.name = self.config.env_name
+        self._config = config
+        self._name = self.config.env_name
         self._plants = []
         self._logger = self.config.logger.getChild('Environment')
         self._logger.setLevel(logging.DEBUG if self.config.debug else logging.INFO)
@@ -33,3 +28,17 @@ class Environment(object):
         for params in self.config.parse_plants():
             self._plants.append(Plant(envConfig=self.config, **params))
 
+    @property
+    def name(self) -> str:
+        """Environment name"""
+        return self._name
+
+    @property
+    def plants(self) -> [Plant]:
+        """List of plants"""
+        return self._plants
+
+    @property
+    def config(self) -> EnvironmentConfig:
+        """Environment config"""
+        return self._config

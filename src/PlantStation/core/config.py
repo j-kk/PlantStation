@@ -276,8 +276,8 @@ class EnvironmentConfig(Config):
                         f'{self._path} Failed to read {section} section {err}')
         return plant_params
 
-    @staticmethod
-    def create_from_file(path: Path, debug: bool = False, dry_run: bool = False):
+    @classmethod
+    def create_from_file(cls, path: Path, debug: bool = False, dry_run: bool = False):
         # check path
         if not path.exists() or not path.is_file():
             raise FileNotFoundError()
@@ -285,7 +285,7 @@ class EnvironmentConfig(Config):
             raise FileExistsError('File has wrong suffix')
 
         env_name = path.name[:-4]
-        env = EnvironmentConfig(env_name, path, debug, dry_run)
+        env = cls(env_name, path, debug, dry_run)
         env.read()
         env.pin_manager.active_limit = env.active_limit #TODO in future
         return env

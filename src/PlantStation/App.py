@@ -10,23 +10,19 @@ from PlantStation.core.config import EnvironmentConfig
 
 class App(object):
     _mainEnvironment: Environment
-    _config_path: str
+    _config_path: Path
     _debug: bool
     _logger = logging.getLogger(__package__)
 
-    def __init__(self, config_path: str, dry_run: bool = False, debug: bool = False):
+    def __init__(self, config_path: Path, dry_run: bool = False, debug: bool = False):
         # get config
         self._config_path = config_path
         self._debug = debug
-        self._mainEnvironment = Environment(config_path=self._config_path, dry_run=dry_run)
 
-        self._mainEnvironment.schedule_monitoring()
+        env_config = EnvironmentConfig.create_from_file(self._config_path, debug, dry_run)
 
-    def run_env(self):
-        self._mainEnvironment.start()
+        self._mainEnvironment = Environment(env_config)
 
-    def run(self):
-        self.run_env()
 
 
 def run():

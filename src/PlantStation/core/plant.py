@@ -139,6 +139,7 @@ class Plant:
     def wateringInterval(self, value: timedelta):
         with self._infoLock:
             self.wateringInterval = Interval.convert_to_interval(value)
+            self._watering_event.set()
 
     @property
     def lastTimeWatered(self) -> datetime:
@@ -177,9 +178,6 @@ class Plant:
         with self._waterLock:
             self._envConfig.env_loop.add_task(self._water(wateringDuration, force)).result()
 
-
-
-
     async def plant_task_loop(self) -> None:
         while True:
             while not self.should_water():
@@ -194,7 +192,7 @@ class Plant:
                 if self.should_water():
                     await asyncio.shield(self._water())
 
-    async def _water(self, wateringDuration: timedelta = None, force: bool =False) -> None:
+    async def _water(self, wateringDuration: timedelta = None, force: bool = False) -> None:
         """Waters plant.
 
         Obtains pump lock (EnvironmentConfig specifies max number of simultanously working pumps).
