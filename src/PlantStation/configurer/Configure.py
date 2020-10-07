@@ -11,7 +11,7 @@ from gpiozero import DigitalOutputDevice, GPIOZeroError, Device, pins
 from PlantStation.configurer.defaults import *
 from PlantStation.core import Config
 from PlantStation.core.helpers import parse_time, does_throw
-from core import EnvironmentConfig, Plant
+from PlantStation.core import EnvironmentConfig, Plant
 
 
 class EnvironmentCreator(object):

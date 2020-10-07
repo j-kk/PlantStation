@@ -3,9 +3,9 @@ import logging
 import sys
 from pathlib import Path
 
-from PlantStation.Configure import GLOBAL_CFG_PATH, USER_CFG_PATH
-from PlantStation.core.environment import Environment
+from PlantStation.configurer.defaults import GLOBAL_CFG_PATH, USER_CFG_PATH
 from PlantStation.core.config import EnvironmentConfig
+from PlantStation.core.environment import Environment
 
 
 class App(object):
@@ -22,7 +22,6 @@ class App(object):
         env_config = EnvironmentConfig.create_from_file(self._config_path, debug, dry_run)
 
         self._mainEnvironment = Environment(env_config)
-
 
 
 def run():
@@ -47,7 +46,7 @@ def run():
 
     logger.debug(f'Path: {args.config_path}')
 
-    if args.config_path[0] is not None:
+    if args.config_path is not None:
         if Path(args.config_path[0]).is_file():
             config_path = Path(args.config_path[0])
         else:

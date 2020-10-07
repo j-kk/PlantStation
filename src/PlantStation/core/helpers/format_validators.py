@@ -1,12 +1,13 @@
 import re
 import datetime
+from typing import Union
 
 gpio_regex = re.compile(r'((BOARD)|(GPIO))\d{1,2}$')
 
 datetime_regex = re.compile(r'((?P<days>\d{1,2})D) ((?P<hours>\d{2}):)((?P<minutes>\d{2}):)(?P<seconds>\d{2})$')
 
 
-def parse_time(time_str: str) -> datetime.timedelta or None:
+def parse_time(time_str: str) -> Union[datetime.timedelta, None]:
     """Parses time to project's time format
 
     Args:

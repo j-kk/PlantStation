@@ -2,8 +2,9 @@ import configparser
 import datetime
 import logging
 import shutil
+import threading
 from pathlib import Path
-from threading import RLock
+from typing import Tuple, Union, List
 
 from . import parse_time
 from .ext import PinManager, EventLoop
@@ -17,8 +18,8 @@ class Config(object):
     """
 
     _path: Path = None
-    _cfg_parser : configparser.RawConfigParser
-    _cfg_lock : RLock
+    _cfg_parser: configparser.RawConfigParser
+    _cfg_lock: threading.Lock
     _logger: logging.Logger
 
     def __init__(self, logger: logging.Logger, path: Path, dry_run=False):
@@ -34,11 +35,11 @@ class Config(object):
         dry_run : boolean = False
             should all IO operations be mocked?
         """
-        self._cfg_lock = RLock()
+        self._cfg_lock = threading.Lock()
         self._cfg_parser = configparser.RawConfigParser()
         self._cfg_parser.optionxform = str
-        self._logger = logger
         self._dry_run = dry_run
+        self._logger = logger
         if path:
             self.path = path
 
@@ -51,29 +52,25 @@ class Config(object):
             self._cfg_parser[key] = value
 
     @property
-    def cfg_parser(self):
+    def cfg_parser(self) -> configparser.RawConfigParser:
+        """Config parser instance"""
         with self._cfg_lock:
             return self._cfg_parser
 
     @property
-    def logger(self):
-        """
-            Returns global logger
-        """
+    def logger(self) -> logging.Logger:
+        """Returns global logger"""
         return self._logger
 
     @property
-    def path(self):
-        """
-            Config location's path
-        """
+    def path(self) -> Path:
+        """Config location's path"""
         with self._cfg_lock:
             if not self._path:
                 self.logger.critical(f'Config path was not set')
                 raise ValueError(f'Config path is not set')
             else:
                 return self._path
-
 
     @path.setter
     def path(self, value: Path):
@@ -166,12 +163,13 @@ class EnvironmentConfig(Config):
         self.pin_manager = PinManager(dry_run=dry_run)
 
     @property
-    def silent_hours(self):
+    def silent_hours(self) -> Union[Tuple[datetime.time, datetime.time], None]:
+        """Returns environment silent hours"""
         try:
             if self.cfg_parser['GLOBAL']['workingHours'] == 'True':
                 begin = datetime.time.fromisoformat(self.cfg_parser['GLOBAL']['workingHoursBegin'])
                 end = datetime.time.fromisoformat(self.cfg_parser['GLOBAL']['workingHoursEnd'])
-                return [end, begin]
+                return end, begin
             else:
                 return None
         except KeyError as exc:
@@ -181,14 +179,19 @@ class EnvironmentConfig(Config):
             self.logger.fatal(f'Silent hours in wrong format {exc}!')
             raise exc
 
-    def disable_silent_hours(self):
+    def disable_silent_hours(self) -> None:
+        """Disables silent hours"""
         with self._cfg_lock:
             self.logger.info(f'Disabled silent hours')
             self.cfg_parser['GLOBAL']['workingHours'] = str(False)
 
-
     @silent_hours.setter
-    def silent_hours(self, value: (datetime.time, datetime.time)):
+    def silent_hours(self, value: Tuple[datetime.time, datetime.time]) -> None:
+        """Sets silent hours
+
+        Args:
+            value (Tuple[datetime.time, datetime.time])
+        """
         value = list(map(lambda t: t.strftime('%H:%M'), value))
         with self._cfg_lock:
             if 'GLOBAL' not in self.cfg_parser:
@@ -199,40 +202,45 @@ class EnvironmentConfig(Config):
 
     @property
     def env_loop(self) -> EventLoop:
-        return self._env_loop
+        """Environment event loop"""
+        with self._cfg_lock:
+            return self._env_loop
 
     @property
-    def active_limit(self):
+    def active_limit(self) -> int:
+        """Returns active pump limit"""
         try:
-            return int(self._cfg_parser['GLOBAL']['ActiveLimit'])
+            with self._cfg_lock:
+                return int(self._cfg_parser['GLOBAL']['ActiveLimit'])
         except KeyError:
             return DEFAULT_ACTIVE_LIMIT
 
     @active_limit.setter
-    def active_limit(self, value: int):
-        self.pin_manager.active_limit = value
-        self.cfg_parser['GLOBAL']['ActiveLimit'] = str(value)
+    def active_limit(self, value: int) -> None:
+        with self._cfg_lock:
+            self.pin_manager.active_limit = value
+            self.cfg_parser['GLOBAL']['ActiveLimit'] = str(value)
         self.logger.debug(f'Active limit set to {value}')
 
-    def list_plants(self) -> [str]:
-        """
-        Returns list of all plants' names specified in config
-        """
-        sections = self.cfg_parser.sections()
-        if 'GLOBAL' in sections:
-            sections.remove('GLOBAL')
-        return sections
-
-    def update_plant_section(self, plant):
-        section = dir(plant)
-
+    def list_plants(self) -> List[str]:
+        """Returns list of all plants' names specified in config"""
         with self._cfg_lock:
+            sections = self.cfg_parser.sections()
+            if 'GLOBAL' in sections:
+                sections.remove('GLOBAL')
+            return sections
+
+    def update_plant_section(self, plant: "Plant") -> None:
+        """Updates plant section"""
+        with self._cfg_lock:
+            section = dir(plant)
             self.cfg_parser[plant.plantName] = {}
 
             for key in section:
                 self.cfg_parser[plant.plantName][key] = str(getattr(plant, key))
 
-    def remove_plant_section(self, plant):
+    def remove_plant_section(self, plant: "Plant") -> None:
+        """Removes plant section"""
         with self._cfg_lock:
             self.cfg_parser.remove_section(plant.plantName)
 
@@ -242,7 +250,7 @@ class EnvironmentConfig(Config):
         Reads config file from location defined by self._cfg_paths
         and if provided data are correct, returns Plants with provided data
         """
-        # read global section
+
         plant_params = []
 
         # read_plants
@@ -287,6 +295,5 @@ class EnvironmentConfig(Config):
         env_name = path.name[:-4]
         env = cls(env_name, path, debug, dry_run)
         env.read()
-        env.pin_manager.active_limit = env.active_limit #TODO in future
+        env.pin_manager.active_limit = env.active_limit  # TODO in future
         return env
-
