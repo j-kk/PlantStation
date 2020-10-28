@@ -39,7 +39,6 @@ class App(object):
         finally:
             self._mainEnvironment.stop()
 
-
 def run():
     parser = argparse.ArgumentParser(description='Plantstation daemon')
     parser.add_argument('-p', '--config-path', action='store', nargs=1, help='Path to config file')
@@ -59,7 +58,7 @@ def run():
 
     logger.debug(f'Path: {args.config_path}')
 
-    if args.config_path[0] is not None:
+    if args.config_path is not None:
         if Path(args.config_path[0]).is_file():
             config_path = Path(args.config_path[0])
         else:

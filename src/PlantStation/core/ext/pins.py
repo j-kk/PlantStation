@@ -9,7 +9,6 @@ from core import EnvironmentConfig
 
 DEFAULT_ACTIVE_LIMIT = 1
 
-
 class SilentHoursException(Exception):
     pass
 

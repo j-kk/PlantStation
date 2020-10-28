@@ -2,6 +2,7 @@ import configparser
 import datetime
 import logging
 import shutil
+import threading
 from pathlib import Path
 from threading import RLock
 from typing import Tuple, List
@@ -34,11 +35,11 @@ class Config(object):
         dry_run : boolean = False
             should all IO operations be mocked?
         """
-        self._cfg_lock = RLock()
+        self._cfg_lock = threading.Lock()
         self._cfg_parser = configparser.RawConfigParser()
         self._cfg_parser.optionxform = str
-        self._logger = logger
         self._dry_run = dry_run
+        self._logger = logger
         if path:
             self.path = path
 
@@ -51,22 +52,19 @@ class Config(object):
             self._cfg_parser[key] = value
 
     @property
-    def cfg_parser(self):
+    def cfg_parser(self) -> configparser.RawConfigParser:
+        """Config parser instance"""
         with self._cfg_lock:
             return self._cfg_parser
 
     @property
-    def logger(self):
-        """
-            Returns global logger
-        """
+    def logger(self) -> logging.Logger:
+        """Returns global logger"""
         return self._logger
 
     @property
-    def path(self):
-        """
-            Config location's path
-        """
+    def path(self) -> Path:
+        """Config location's path"""
         with self._cfg_lock:
             if not self._path:
                 self.logger.critical(f'Config path was not set')
@@ -243,6 +241,7 @@ class EnvironmentConfig(Config):
         section = dir(plant)
 
         with self._cfg_lock:
+            section = dir(plant)
             self.cfg_parser[plant.plantName] = {}
 
             for key in section:
@@ -263,7 +262,7 @@ class EnvironmentConfig(Config):
         Reads config file from location defined by self._cfg_paths
         and if provided data are correct, returns Plants with provided data
         """
-        # read global section
+
         plant_params = []
 
         # read_plants
