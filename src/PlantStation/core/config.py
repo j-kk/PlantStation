@@ -5,9 +5,7 @@ import shutil
 import threading
 from pathlib import Path
 from threading import RLock
-from typing import Tuple, List
-
-from . import parse_time
+from typing import Tuple, List, Optional
 
 DEFAULT_ACTIVE_LIMIT = 1
 
@@ -17,12 +15,12 @@ class Config(object):
         Thrad safe config structure with logging
     """
 
-    _path: Path = None
-    _cfg_parser: configparser.RawConfigParser
+    _path: Optional[Path] = None
+    _cfg_parser: configparser.ConfigParser
     _cfg_lock: RLock
     _logger: logging.Logger
 
-    def __init__(self, logger: logging.Logger, path: Path, dry_run=False):
+    def __init__(self, path: Path, logger_suffix: Optional[str] = None):
         """
             Default constructor. Uses program's logger
 
@@ -35,55 +33,39 @@ class Config(object):
         dry_run : boolean = False
             should all IO operations be mocked?
         """
-        self._cfg_lock = threading.Lock()
+        self._cfg_lock = threading.RLock()
         self._cfg_parser = configparser.RawConfigParser()
         self._cfg_parser.optionxform = str
-        self._dry_run = dry_run
-        self._logger = logger
-        if path:
-            self.path = path
+        self._logger = logging.getLogger(f'{__name__}:{logger_suffix}')
+        self._path = path
 
-    def __getitem__(self, item):
-        with self._cfg_lock:
-            return self._cfg_parser[item]
-
-    def __setitem__(self, key, value):
-        with self._cfg_lock:
-            self._cfg_parser[key] = value
-
-    @property
-    def cfg_parser(self) -> configparser.RawConfigParser:
-        """Config parser instance"""
-        with self._cfg_lock:
-            return self._cfg_parser
-
-    @property
-    def logger(self) -> logging.Logger:
-        """Returns global logger"""
-        return self._logger
+    def update_section(self, section: str, key: str, value) -> None:
+        if not self._cfg_parser.has_section(section):
+            self._cfg_parser.add_section(section)
+        self._cfg_parser[section][key] = value
+        self.write()
 
     @property
     def path(self) -> Path:
         """Config location's path"""
         with self._cfg_lock:
             if not self._path:
-                self.logger.critical(f'Config path was not set')
+                self._logger.critical(f'Config path was not set')
                 raise ValueError(f'Config path is not set')
             else:
                 return self._path
 
     @path.setter
-    def path(self, value: Path):
+    def path(self, value: Optional[Path]):
+        assert isinstance(value, Path) or value is None
         with self._cfg_lock:
-            if value.suffix != '.cfg':
-                raise ValueError(f'Specified path is not a .cfg')
-            if value.is_dir():
-                raise IsADirectoryError()
-            if not self._dry_run:
+            if value is not None:
+                if value.is_dir():
+                    raise IsADirectoryError()
                 if not value.parent.is_dir():
                     self._path.parent.mkdir(parents=True)
-            if self._path:
-                shutil.move(self._path, value)
+                if self._path:
+                    shutil.move(self._path, value)
             self._path = value
 
     def read(self) -> None:
@@ -92,25 +74,23 @@ class Config(object):
         """
         with self._cfg_lock:
             if not self._cfg_parser.read(self.path):
-                self.logger.critical(f'Config file {self.path} not found')
+                self._logger.critical(f'Config file {self.path} not found')
                 raise FileNotFoundError(f'Error: environment config file not found. Quitting!')
             else:
-                self.logger.info(f'Config file {self._path} read succesfully!')
+                self._logger.info(f'Config file {self._path} read succesfully!')
 
     def write(self) -> None:
-        """
-            Writes config to file. Thread safe
-        """
+        """Writes config to file. Thread safe"""
         with self._cfg_lock:
             try:
                 cfg_file = open(self.path, 'w')
                 self._cfg_parser.write(cfg_file)
-                self.logger.info(f'Created config file in {self._path}')
+                self._logger.debug(f'Saved config file in {self._path}')
             except FileNotFoundError or IsADirectoryError as exc:
-                self.logger.warning(f'Couldn\'t create file in given directory.')
+                self._logger.warning(f'Couldn\'t create file in given directory.')
                 raise exc
             except PermissionError as exc:
-                self.logger.error(
+                self._logger.error(
                     f'Couldn\'t create file in given directory. No permissions to create file in {self._path}')
                 raise exc
 
@@ -126,32 +106,18 @@ class EnvironmentConfig(Config):
             - debug (bool): Show debug data
             - dry_run (bool): Simulate operations on pins
     """
-    _dry_run: bool
     _env_name: str
-    _debug: bool
 
     def __init__(self,
                  env_name: str,
-                 path: Path = None,
-                 debug: bool = False,
-                 dry_run: bool = False):
+                 path: Optional[Path] = None):
         # set env vars
         self._env_name = env_name
-        self._debug = debug
-        self._dry_run = dry_run
-
-        # create global logger
-        logger = logging.getLogger('PlantStation').getChild(self._env_name)
-        Formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        channel = logging.StreamHandler()
-        channel.setFormatter(Formatter)
-        logger.addHandler(channel)
-        logger.setLevel(logging.DEBUG if debug else logging.INFO)
 
         # initialize config
-        super().__init__(logger, path)
+        super().__init__(path, logger_suffix=env_name)
         if path is None:
-            self.cfg_parser['GLOBAL'] = {
+            self._cfg_parser['GLOBAL'] = {
                 'env_name': self._env_name
             }
 
@@ -160,34 +126,24 @@ class EnvironmentConfig(Config):
         """Silent hours working hours in tuple: (end, begin)"""
         try:
             with self._cfg_lock:
-                begin = datetime.time.fromisoformat(self.cfg_parser['GLOBAL']['workingHoursBegin'])
-                end = datetime.time.fromisoformat(self.cfg_parser['GLOBAL']['workingHoursEnd'])
+                begin = datetime.time.fromisoformat(self._cfg_parser['GLOBAL']['workingHoursBegin'])
+                end = datetime.time.fromisoformat(self._cfg_parser['GLOBAL']['workingHoursEnd'])
                 return end, begin
         except KeyError as exc:
-            self.logger.error(f'Silent hours not given!')
+            self._logger.error(f'Silent hours not given!')
             raise exc
         except ValueError as exc:
-            self.logger.fatal(f'Silent hours in wrong format {exc}!')
+            self._logger.fatal(f'Silent hours in wrong format {exc}!')
             raise exc
 
     @silent_hours.setter
     def silent_hours(self, value: Tuple[datetime.time, datetime.time]) -> None:
         value = list(map(lambda t: t.strftime('%H:%M'), value))
         with self._cfg_lock:
-            if 'GLOBAL' not in self.cfg_parser:
-                self.cfg_parser['GLOBAL'] = {}
-            self.cfg_parser['GLOBAL']['workingHoursBegin'] = value[1]
-            self.cfg_parser['GLOBAL']['workingHoursEnd'] = value[0]
-
-    @property
-    def debug(self) -> bool:
-        """Is debug mode"""
-        return self._debug
-
-    @property
-    def dry_run(self):
-        """Is dry run"""
-        return self._dry_run
+            if 'GLOBAL' not in self._cfg_parser:
+                self._cfg_parser['GLOBAL'] = {}
+            self._cfg_parser['GLOBAL']['workingHoursBegin'] = value[1]
+            self._cfg_parser['GLOBAL']['workingHoursEnd'] = value[0]
 
     @property
     def env_name(self) -> str:
@@ -199,13 +155,13 @@ class EnvironmentConfig(Config):
     def silent_hours_state(self) -> bool:
         """State of the silent hours (enabled/disabled)"""
         with self._cfg_lock:
-            return self.cfg_parser['GLOBAL']['workingHours'] == 'True'
+            return self._cfg_parser['GLOBAL']['workingHours'] == 'True'
 
     @silent_hours_state.setter
     def silent_hours_state(self, value: bool) -> None:
         with self._cfg_lock:
-            self.logger.info(f'Setting silent hours state to {str(value)}')
-            self.cfg_parser['GLOBAL']['workingHours'] = str(value)
+            self._logger.info(f'Setting silent hours state to {str(value)}')
+            self._cfg_parser['GLOBAL']['workingHours'] = str(value)
 
     @property
     def active_limit(self) -> int:
@@ -220,32 +176,16 @@ class EnvironmentConfig(Config):
     @active_limit.setter
     def active_limit(self, value: int) -> None:
         with self._cfg_lock:
-            self.cfg_parser['GLOBAL']['ActiveLimit'] = str(value)
-            self.logger.debug(f'Active limit set to {value}')
+            self._cfg_parser['GLOBAL']['ActiveLimit'] = str(value)
+            self._logger.debug(f'Active limit set to {value}')
 
     def list_plants(self) -> List[str]:
         """Returns list of all plants' names specified in config"""
         with self._cfg_lock:
-            sections = self.cfg_parser.sections()
+            sections = self._cfg_parser.sections()
             if 'GLOBAL' in sections:
                 sections.remove('GLOBAL')
             return sections
-
-    def update_plant_section(self, plant: "Plant") -> None:
-        """Updates plant section of environment
-
-        Args:
-            - plant (Plant): plant object to update
-
-        """
-        section = dir(plant)
-
-        with self._cfg_lock:
-            section = dir(plant)
-            self.cfg_parser[plant.plantName] = {}
-
-            for key in section:
-                self.cfg_parser[plant.plantName][key] = str(getattr(plant, key))
 
     def remove_plant_section(self, plant: "Plant") -> None:
         """Removes plant section from config
@@ -254,50 +194,46 @@ class EnvironmentConfig(Config):
             plant (Plant): plant to remove
         """
         with self._cfg_lock:
-            self.cfg_parser.remove_section(plant.plantName)
+            self._cfg_parser.remove_section(plant.plantName)
 
-    def parse_plants(self):
+    def parse_plants(self) -> List[configparser.SectionProxy]:
         """Reads environment config file - plant section
 
         Reads config file from location defined by self._cfg_paths
         and if provided data are correct, returns Plants with provided data
         """
 
-        plant_params = []
-
         # read_plants
-        for section in self._cfg_parser:
-            if section == 'DEFAULT':
-                continue
-            if section != 'GLOBAL':
-                self.logger.debug('Found new section: %s', section)
-                try:  # TODO How about replacing params with Dataclass?
-                    params = {
-                        'plantName': str(section),
-                        'wateringDuration': datetime.timedelta(
-                            seconds=float(self._cfg_parser[section]['wateringDuration'])),
-                        'wateringInterval': parse_time(self._cfg_parser[section]['wateringInterval']),
-                        'gpioPinNumber': str(self._cfg_parser[section]['gpioPinNumber']),
-                        'isActive': bool(self._cfg_parser[section]['isActive'])}
-                    if self._cfg_parser[section]['lastTimeWatered'] != '':
-                        time_str = self._cfg_parser[section]['lastTimeWatered']
-                        params['lastTimeWatered'] = datetime.datetime.strptime(time_str, '%Y-%m-%d %X')
-                    else:
-                        params['lastTimeWatered'] = datetime.datetime.min
-                    plant_params.append(params)
-                    self.logger.info(
-                        f'Found new plant: {params["plantName"]}, pin: {params["gpioPinNumber"]}')
-                except KeyError as err:
-                    self.logger.error(
-                        f'{self._cfg_parser}: Failed to read {section} section - '
-                        f'option not found {str(err)}')
-                except Exception as err:
-                    self.logger.error(
-                        f'{self._path} Failed to read {section} section {err}')
-        return plant_params
+        for section_name in self._cfg_parser.sections():
+            if section_name not in ['GLOBAL']:
+                yield self._cfg_parser[section_name]
+
+    def calc_working_hours(self) -> datetime.timedelta:
+        """Calculates time to next watering
+
+        Returns:
+            (timedelta): time to next watering
+        """
+        silent_hours = self.silent_hours
+
+        if silent_hours is not None:
+            now = datetime.datetime.now()
+            today = now.date()
+
+            prev_day = today - datetime.timedelta(days=1)
+            for day in [today, prev_day]:
+                window = datetime.datetime.combine(day, silent_hours[0]), datetime.datetime.combine(day,
+                                                                                                    silent_hours[1])
+                if window[0] > window[1]:
+                    window[1] += datetime.timedelta(days=1)
+
+                if window[0] <= now < window[1]:
+                    return window[1] - now
+
+        return datetime.timedelta(0)
 
     @classmethod
-    def create_from_file(cls, path: Path, debug: bool = False, dry_run: bool = False):
+    def create_from_file(cls, path: Path):
         """Builds env config from file"""
         if not path.exists() or not path.is_file():
             raise FileNotFoundError()
@@ -305,6 +241,6 @@ class EnvironmentConfig(Config):
             raise FileExistsError('File has wrong suffix')
 
         env_name = path.name[:-4]
-        env = cls(env_name, path, debug, dry_run)
+        env = cls(env_name, path)
         env.read()
         return env

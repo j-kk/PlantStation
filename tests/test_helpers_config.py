@@ -3,7 +3,6 @@ import uuid
 
 import mock
 import pytest
-from mock import patch
 
 from PlantStation.core.config import Config
 
@@ -28,7 +27,7 @@ def test_read_files_not_found(mock_logger):
 
 @mock.patch("logging.Logger")
 def test_write_all_ok(mock_logger: mock.MagicMock):
-    with patch('config.Config._write_to_file') as mock_write:
+    with mock.patch('config.Config._write_to_file') as mock_write:
         expected_res = ['test']
         mock_write.return_value = expected_res
         config = Config(mock_logger, )

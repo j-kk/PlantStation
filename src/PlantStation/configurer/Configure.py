@@ -41,24 +41,24 @@ class EnvironmentCreator(object):
                             'Specify']
             },
             {
-                'type': 'confirm',
-                'message': 'Specify working hours? (who wants burping at the midnight?)',
-                'name': 'workingHours',
-                'default': False
-            },
-            {
                 'type': 'input',
                 'message': 'How many pumps should work simultanously?',
                 'name': 'ActiveLimit',
                 'default': '1',
                 'validate': lambda t: does_throw(int, t)
 
+            },
+            {
+                'type': 'confirm',
+                'message': 'Specify working hours? (who wants burping at the midnight?)',
+                'name': 'WorkingHours',
+                'default': False
             }
         ]
         answers = prompt(questions)
         self.env_name = answers['envName']
-        self.workingHours = str(answers['workingHours'])
-        self.config = EnvironmentConfig(self.env_name, debug=self.debug, dry_run=self.dry_run)
+        self.workingHours = str(answers['WorkingHours'])
+        self.config = EnvironmentConfig(self.env_name)
         self.config.active_limit = answers['ActiveLimit']
 
         # Generate paths to config destinations
@@ -89,24 +89,24 @@ class EnvironmentCreator(object):
             except ValueError or IsADirectoryError as exc:
                 raise exc
 
-        if answers['workingHours']:
+        if answers['WorkingHours']:
             questions = [
                 {
                     'type': 'input',
                     'message': 'Enter begin of the working hours (HH:MM)',
-                    'name': 'workingHoursBegin',
+                    'name': 'WorkingHoursBegin',
                     'validate': lambda t: does_throw(datetime.time.fromisoformat, [t])
                 },
                 {
                     'type': 'input',
                     'message': 'Enter end of the working hours (HH:MM)',
-                    'name': 'workingHoursEnd',
+                    'name': 'WorkingHoursEnd',
                     'validate': lambda t: does_throw(datetime.time.fromisoformat, [t])
                 }
             ]
             answers = prompt(questions)
-            self.config.silent_hours = (datetime.time.fromisoformat(answers['workingHoursEnd']),
-                                        datetime.time.fromisoformat(answers['workingHoursBegin']))
+            self.config.silent_hours = (datetime.time.fromisoformat(answers['WorkingHoursEnd']),
+                                        datetime.time.fromisoformat(answers['WorkingHoursBegin']))
 
         if self.dry_run:
             Device.pin_factory = pins.mock.MockFactory()
@@ -126,7 +126,7 @@ class EnvironmentCreator(object):
                 'type': 'input',
                 'message': 'Enter plant\'s name:',
                 'name': 'plantName',
-                'validate': lambda name: name not in self.config.cfg_parser and name != ""
+                'validate': lambda name: name not in self.config.list_plants() and name != ""
             },
             {
                 'type': 'input',
@@ -175,7 +175,7 @@ class ServiceCreatorConfig(Config):
     """
 
     def __init__(self, service_path: Path, path_to_config: Path):
-        super().__init__(logging.getLogger(__package__), path=service_path)
+        super().__init__(path=service_path)
         self._cfg_parser['Unit'] = {
             'Description': 'PlantStation service',  # TODO subparser
             'After': 'network.target',
@@ -199,6 +199,7 @@ class ServiceCreatorConfig(Config):
 
 class Configurer():
     def __init__(self):
+        # TODO subparser
         parser = argparse.ArgumentParser(
             description='PlantStation configurator',
             usage='''PlantSetup cmd [<args>]
@@ -235,9 +236,8 @@ class Configurer():
             EnvironmentCreator(dry_run=mock)
 
             print(f'Created config')
-        except Exception as exc:
-            print(f'Couldn\'t create config file. Quitting! Error: {exc.__str__()}')
-            sys.exit(1)
+        except KeyboardInterrupt:
+            pass
 
     def service(self):
         parser = argparse.ArgumentParser(description='Create service file for systemd')
@@ -274,6 +274,3 @@ class Configurer():
                 print(f'Couldn\'t create service files. Quitting!')
             sys.exit(1)
 
-
-if __name__ == '__main__':
-    Configurer()

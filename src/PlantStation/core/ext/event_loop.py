@@ -8,7 +8,6 @@ from typing import Optional
 class EventLoop(Thread):
     """Asyncio event loop in standalone thread."""
     _loop: asyncio.AbstractEventLoop
-    _tid: Optional[Thread]
 
     def __init__(self):
         Thread.__init__(self)
@@ -22,14 +21,13 @@ class EventLoop(Thread):
     def run(self) -> None:
         """Implementation of Thread run() method. Runs event loop"""
         asyncio.set_event_loop(self._loop)
-        self._tid = current_thread()
         self._loop.run_forever()
+        print('bye')
 
     def stop(self) -> None:
         """Stops event loop and waits for thread termination"""
         self._loop.call_soon_threadsafe(self._loop.stop)
-        self._tid.join()
-        self._tid = None
+        self.join()
 
     def add_task(self, coro) -> Future:
         """this method should return a task object, that I

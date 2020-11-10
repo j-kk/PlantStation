@@ -7,7 +7,7 @@ import mock
 import pytest
 
 import PlantStation
-from core.config import Config, EnvironmentConfig
+from PlantStation.core.config import Config, EnvironmentConfig
 # noinspection PyUnresolvedReferences
 from .context import create_plant_simple, simple_env_config, add_plants_to_config, cleanup
 

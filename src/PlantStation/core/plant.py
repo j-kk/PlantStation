@@ -1,27 +1,26 @@
 import asyncio
+import configparser
 import logging
 import threading
 from asyncio import Future
 from datetime import timedelta, datetime
-from functools import wraps
 from typing import Callable, Optional
-
-from gpiozero import GPIOZeroError
 
 from .config import EnvironmentConfig
 from .ext import Interval, Duration, EventLoop
-from .ext.pins import LimitedDigitalOutputDevice, PinManager
-from .helpers.format_validators import is_gpio
+from .ext.pins import LimitedDigitalOutputDevice, PinManager, SilentHoursException
+from .helpers.format_validators import is_gpio, parse_time
 
 
-def _update_config(propertySetter: Callable):
-    @wraps(propertySetter)
-    def _property_modifier(self, *args, **kwargs):
-        with self._infoLock:
-            propertySetter(self, *args, **kwargs)
-            self._envConfig.update_plant_section(self)
+def update_config(propertySetter: Callable):
+    def wrapper(self, value, *args, **kwargs):
+        propertySetter(self, value, *args, **kwargs)
+        if isinstance(value, datetime):
+            self._envConfig.update_section(self._plantName, propertySetter.__name__, value.strftime('%Y-%m-%d %X'))
+        else:
+            self._envConfig.update_section(self._plantName, propertySetter.__name__, str(value))
 
-    return _property_modifier
+    return wrapper
 
 
 class Plant:
@@ -37,22 +36,23 @@ class Plant:
     _envConfig: EnvironmentConfig
     _logger: logging.Logger
     _gpioPinNumber: str
-    _pumpSwitch: LimitedDigitalOutputDevice
-    _infoLock: threading.RLock
+    _pumpSwitch: Optional[LimitedDigitalOutputDevice]
+    _infoLock: threading.Lock
 
     _isActive: bool
     _waterLock: threading.Lock
     _relatedTask: Optional[Future]
-    _watering_event: Optional[asyncio.Event]
+
+    _env_loop: Optional[EventLoop]
 
     def __init__(self,
                  plantName: str,
-                 env_loop: EventLoop,
-                 pin_manager: PinManager,
                  envConfig: EnvironmentConfig,
                  gpioPinNumber: str,
                  wateringDuration: timedelta,
                  wateringInterval: timedelta,
+                 env_loop: Optional[EventLoop] = None,
+                 pin_manager: Optional[PinManager] = None,
                  lastTimeWatered: datetime = datetime.min,
                  isActive=True):
         """
@@ -65,40 +65,42 @@ class Plant:
             wateringInterval (timedelta): Time between watering
             lastTimeWatered (datetime): When plant was watered last time?
         """
-        # Check if data is correct
-        if None in [plantName, envConfig, gpioPinNumber, wateringDuration, wateringInterval]:
-            raise KeyError()
-        if plantName == '':
-            raise ValueError()
-        if datetime.now() < lastTimeWatered:
-            raise ValueError('Last time watered is in future')
-        if wateringDuration <= timedelta():
-            raise ValueError("Watering duration is negative or equal to 0")
-        if wateringInterval <= timedelta():
-            raise ValueError("Watering interval is negative or equal to 0")
-        if not is_gpio(gpioPinNumber):
-            raise ValueError('Wrong GPIO value')
 
-        # set all attributes
-        self._infoLock = threading.RLock()
+        self._infoLock = threading.Lock()
+        self._waterLock = threading.Lock()
+        assert type(envConfig) is EnvironmentConfig
         self._envConfig = envConfig
 
-        self._plantName = plantName
-        self._lastTimeWatered: datetime = lastTimeWatered
-        self._wateringDuration = Duration.convert_to_duration(wateringDuration)
-        self._wateringInterval = Interval.convert_to_interval(wateringInterval)
-        self._env_loop = env_loop
+        self.plantName = plantName
+        self._logger = logging.getLogger(self._envConfig.env_name).getChild(self.plantName)
 
-        self._gpioPinNumber = gpioPinNumber
-        self._logger = self._envConfig.logger.getChild(self._plantName)
+        if env_loop:
+            assert type(env_loop) is EventLoop
+            self._env_loop = env_loop
+        else:
+            self._env_loop = None
+
+        assert is_gpio(gpioPinNumber), 'Wrong GPIO value'
+        self.gpioPinNumber = gpioPinNumber
         # activates pump
+        self._isActive = False
         self.isActive = isActive
-        self._pumpSwitch = pin_manager.create_pump(self._gpioPinNumber)
-        self._waterLock = threading.Lock()
+
+        if pin_manager:
+            self._pumpSwitch = pin_manager.create_pump(self.gpioPinNumber)
+        else:
+            self._pumpSwitch = None
+
+        assert isinstance(lastTimeWatered, datetime)
+        assert lastTimeWatered <= datetime.now(), 'Last time watered is in future'
+        self.lastTimeWatered = lastTimeWatered
+
+        self.wateringDuration = Duration.convert_to_duration(wateringDuration)
+        self.wateringInterval = Interval.convert_to_interval(wateringInterval)
 
         self._logger.debug(
-            f'Creating successful. Last time watered: {self._lastTimeWatered}. Interval: {self._wateringInterval}. '
-            f'Pin: {self._gpioPinNumber}')
+            f'Creating successful. Last time watered: {self.lastTimeWatered}. Interval: {self.wateringInterval}. '
+            f'Pin: {self.gpioPinNumber}')
 
     @property
     def plantName(self) -> str:
@@ -107,35 +109,41 @@ class Plant:
             return self._plantName
 
     @plantName.setter
-    @_update_config
+    @update_config
     def plantName(self, plantName: str) -> None:
+        assert isinstance(plantName, str)
+        assert len(plantName) > 0
         with self._infoLock:
-            self.plantName = plantName
+            self._plantName = plantName
 
     @property
-    def wateringDuration(self) -> timedelta:
+    def wateringDuration(self) -> Duration:
         """Duration between waterings"""
         with self._infoLock:
             return self._wateringDuration
 
     @wateringDuration.setter
-    @_update_config
-    def wateringDuration(self, value: timedelta) -> None:
+    @update_config
+    def wateringDuration(self, value: Duration) -> None:
+        assert isinstance(value, Duration)
+        assert not value <= timedelta(), "Watering duration is negative or equal to 0"
         with self._infoLock:
-            self._wateringDuration = Duration.convert_to_duration(value)
+            self._wateringDuration = value
 
     @property
-    def wateringInterval(self) -> timedelta:
+    def wateringInterval(self) -> Interval:
         """Interval between waterings"""
         with self._infoLock:
             return self._wateringInterval
 
     @wateringInterval.setter
-    @_update_config
-    def wateringInterval(self, value: timedelta):
+    @update_config
+    def wateringInterval(self, value: Interval):
+        assert isinstance(value, Interval)
+        assert not value <= timedelta(), "Watering interval is negative or equal to 0"
         with self._infoLock:
-            self.wateringInterval = Interval.convert_to_interval(value)
-            self._watering_event.set()
+            self._wateringInterval = value
+            # TODO update time
 
     @property
     def lastTimeWatered(self) -> datetime:
@@ -143,91 +151,105 @@ class Plant:
         with self._infoLock:
             return self._lastTimeWatered
 
+    @lastTimeWatered.setter
+    @update_config
+    def lastTimeWatered(self, value: datetime) -> None:
+        assert isinstance(value, datetime)
+        with self._infoLock:
+            self._lastTimeWatered = value
+
     @property
-    def gpioPinNumber(self):
+    def gpioPinNumber(self) -> str:
         """GpioPinNumber"""
         with self._infoLock:
             return self._gpioPinNumber
 
+    @gpioPinNumber.setter
+    @update_config
+    def gpioPinNumber(self, value: str) -> None:
+        with self._infoLock:
+            self._gpioPinNumber = value
+
     @property
-    def isActive(self):
+    def isActive(self) -> bool:
         """Is watering active?"""
         with self._infoLock:
             return self._isActive
 
     @isActive.setter
-    @_update_config
-    def isActive(self, value: bool):
+    @update_config
+    def isActive(self, value: bool) -> None:
+        assert type(value) is bool
         with self._infoLock:
             if self._isActive == value:
                 return
-            elif value:
-                self._relatedTask = self._env_loop.add_task(self.plant_task_loop())
-                self._envConfig.logger.info(f'Auto watering activated')
-            else:
-                self._env_loop.cancel_task(self._relatedTask)
-                self._envConfig.logger.info(f'Auto watering deactivated')
-                self._relatedTask = None
             self._isActive = value
-
-    def manual_water(self, wateringDuration: timedelta = None, force: bool = False) -> None:
-        with self._waterLock:
-            self._env_loop.add_task(self._water(wateringDuration, force)).result()
+            if self._env_loop:
+                if self._isActive:
+                    self._relatedTask = self._env_loop.add_task(self.plant_task_loop())
+                    self._logger.info(f'Auto watering activated')
+                else:
+                    self._env_loop.cancel_task(self._relatedTask)
+                    self._logger.info(f'Auto watering deactivated')
+                    self._relatedTask = None
 
     async def plant_task_loop(self) -> None:
         while True:
-            while not self.should_water():
-                try:
-                    await asyncio.wait_for(self._watering_event.wait(), self.time_to_next_watering().total_seconds())
-                except asyncio.TimeoutError:
-                    pass
-                if self._watering_event:
-                    self._watering_event.clear()
-                    break
+            await asyncio.sleep(self.time_to_next_watering().total_seconds())
+            await asyncio.sleep(self._envConfig.calc_working_hours().total_seconds())
             with self._waterLock:
-                if self.should_water():
-                    await asyncio.shield(self._water())
+                await asyncio.shield(self._water())
 
-    async def _water(self, wateringDuration: timedelta = None, force: bool = False) -> None:
+    async def _water(self, wateringDuration: Optional[timedelta] = None) -> None:
         """Waters plant.
 
         Obtains pump lock (EnvironmentConfig specifies max number of simultanously working pumps).
         Blocks thread until plant is watered
         """
         try:
-            self._logger.info(f'{self._plantName}: Started watering')
-            self._pumpSwitch.on(force)
+            self._logger.info(f'{self._plantName}: Started watering.')
             if wateringDuration is None:
-                await asyncio.sleep(self.wateringDuration.total_seconds())
-            else:
-                await asyncio.sleep(wateringDuration.total_seconds())
-        except GPIOZeroError as exc:
-            self._logger.error(f'{self._plantName}: GPIO error')
-            raise exc
-        finally:
-            self._pumpSwitch.off()
-            with self._infoLock:
-                self._lastTimeWatered = datetime.now()
-            self._logger.info(f'{self._plantName}: Stopped watering')
+                wateringDuration = self.wateringDuration
+            await self._pumpSwitch.activate_for(wateringDuration)
+            self.lastTimeWatered = datetime.now()
+            self._logger.info(f'{self._plantName}: Stopped watering.')
+        except SilentHoursException:
+            self._logger.info(f'{self._plantName}: Watering canceled. Silent hours are active.')
 
     def should_water(self) -> bool:
         """Checks if it is right to water plant now"""
         self._logger.debug(
-            f'Time now: {datetime.now()}. Planned watering: {self._lastTimeWatered + self._wateringInterval}')
-        if datetime.now() >= self._lastTimeWatered + self._wateringInterval:
-            self._logger.info(f'{self._plantName}: It\'s right to water me now!')
+            f'Time now: {datetime.now()}. Planned watering: {self.lastTimeWatered + self.wateringInterval}')
+        if datetime.now() >= self.lastTimeWatered + self.wateringInterval:
+            self._logger.info(f'{self.plantName}: It\'s right to water me now!')
             return True
         else:
-            self._logger.info(f'{self._plantName}: Give me some time, water me later')
+            self._logger.info(f'{self.plantName}: Give me some time, water me later')
             return False
 
-    def calc_next_watering(self) -> datetime:
-        """Calculate next watering date
+    def time_to_next_watering(self) -> timedelta:
+        """Calculate time to next watering
 
         Returns:
-            (datetime) watering datetime
+            (timedelta) remaining time
         """
-        return self._lastTimeWatered + self._wateringInterval
+        with self._infoLock:
+            return self._lastTimeWatered + self._wateringInterval - datetime.now()
 
-    def time_to_next_watering(self) -> timedelta:
-        return self.calc_next_watering() - datetime.now()
+    @classmethod
+    def from_config(cls,
+                    env_config: EnvironmentConfig,
+                    section: configparser.SectionProxy,
+                    env_loop: EventLoop,
+                    pin_manager: PinManager) -> "Plant":
+
+        return cls(env_loop=env_loop,
+                   pin_manager=pin_manager,
+                   plantName=section.name,
+                   envConfig=env_config,
+                   gpioPinNumber=section['gpioPinNumber'],
+                   wateringDuration=timedelta(seconds=float(section['wateringDuration'])),
+                   wateringInterval=parse_time(section['wateringInterval']),
+                   lastTimeWatered=datetime.strptime(section['lastTimeWatered'], '%Y-%m-%d %X'),
+                   isActive=bool(section['isActive'])
+                   )

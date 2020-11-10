@@ -23,20 +23,23 @@ class Environment(object):
     _env_loop: EventLoop
     _pin_manager: PinManager
 
-    def __init__(self, config: EnvironmentConfig):
+    def __init__(self, config: EnvironmentConfig, dry_run: bool = False):
         self._config = config
         self._name = self.config.env_name
         self._plants = []
-        self._logger = self.config.logger.getChild('Environment')
+        self._logger = logging.getLogger(self.config.env_name)
 
         # initialize pins
-        self._pin_manager = PinManager(dry_run=self.config.dry_run, config=config)
         self._env_loop = EventLoop()
+        self._pin_manager = PinManager(self._env_loop, dry_run=dry_run, config=config)
 
         self._logger.info(f'Created {self.name} environment')
-        for params in self.config.parse_plants():
+        for section in self.config.parse_plants():
             self._plants.append(
-                Plant(env_loop=self._env_loop, pin_manager=self._pin_manager, envConfig=self.config, **params))
+                Plant.from_config(env_loop=self._env_loop,
+                                  pin_manager=self._pin_manager,
+                                  section=section,
+                                  env_config=self.config))
 
     @property
     def name(self) -> str:
@@ -67,4 +70,6 @@ class Environment(object):
         self.env_loop.start()
 
     def stop(self) -> None:
+        self._logger.debug(f'Environment stopping')
         self.env_loop.stop()
+        self._logger.debug(f'Environment stopped')

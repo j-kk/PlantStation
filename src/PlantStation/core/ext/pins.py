@@ -1,15 +1,19 @@
-from datetime import datetime, timedelta, time, date
-from threading import Lock, Condition
-from typing import Optional, List, Tuple
+import asyncio
+import logging
+from datetime import timedelta, time
+from typing import Optional, Tuple
 
 from gpiozero import DigitalOutputDevice
 from gpiozero.pins import mock, native, local
 
-from core import EnvironmentConfig
+from PlantStation.core import EnvironmentConfig
+from PlantStation.core.ext import EventLoop, Duration
 
 DEFAULT_ACTIVE_LIMIT = 1
 
+
 class SilentHoursException(Exception):
+    """Exception thrown when pump is ordered to work during silent hours"""
     pass
 
 
@@ -19,57 +23,80 @@ class LimitedDigitalOutputDevice(DigitalOutputDevice):
     of active pins at once. Requires :class: PinManager which grants
     permission
     """
-    _manager = None
+    _manager: "PinManager"
+    _logger: logging.Logger
 
-    def __init__(self, manager, **kwargs):
+    def __init__(self, manager, config: EnvironmentConfig, **kwargs):
         super().__init__(**kwargs)
+        self._logger = logging.getLogger(__name__ + ':gpio')
         self._manager = manager
+        self._config = config
 
-    def on(self, force: bool = False) -> None:
+    async def manual_on(self, force: bool = False) -> None:  # FixMe mutual exclusion with activate_for
         """Turns on the device. Respects to working hours scheduled by pin_manager
 
         Args:
             force (bool): ignores working hours schedule
         """
-        if not force:
-            if self._manager.calc_working_hours() is not None:
-                raise SilentHoursException()
-        self._manager.acquire_lock()
+        if self._config.calc_working_hours().total_seconds() > 0 and not force:
+            raise SilentHoursException()
+
+        await self._manager.acquire_lock()
         super().on()
 
-    def off(self):
+    async def manual_off(self) -> None:
         """Turns off the device"""
         super().off()
-        self._manager.release_lock()
+        await self._manager.release_lock()
+
+    async def activate_for(self, duration: Duration, force: bool = False) -> None:
+        """Activates pump for given time. Use force to override silent hours.
+
+        Args:
+            duration (timedelta): time to water
+            force (bool): override silent hours rule
+        """
+        if self._config.calc_working_hours().total_seconds() > 0 and not force:
+            raise SilentHoursException
+
+        await self._manager.acquire_lock()
+        self.on()
+        self._logger.debug(f'Pin {self._pin} is on')
+        await asyncio.shield(asyncio.sleep(duration.total_seconds()))
+        self.off()
+        self._logger.debug(f'Pin {self._pin} is off')
+        await asyncio.shield(self._manager.release_lock())
 
 
 class PinManager(object):
     """Manages pin IO and responds for parallel working pump limit"""
     _factory: local.LocalPiFactory
 
+    _config: Optional[EnvironmentConfig]
     _active_limit: int
     _working_pumps: int
-    _pump_lock: Lock
-    _wait_for_pump: Condition
-    _devices: List[LimitedDigitalOutputDevice]
+    _pump_lock: asyncio.Lock
+    _wait_for_pump: asyncio.Condition
     _working_hours: Optional[Tuple[time, time]]
 
     def __init__(self,
+                 event_loop: EventLoop,
+                 config: EnvironmentConfig,
                  active_limit: int = DEFAULT_ACTIVE_LIMIT,
-                 dry_run: bool = False,
-                 working_hours: Optional[Tuple[time, time]] = None,
-                 config: Optional[EnvironmentConfig] = None):
+                 dry_run: bool = False):
+
         # create lock & condition
-        self._pump_lock = Lock()
-        self._wait_for_pump = Condition(self._pump_lock)
+        self._pump_lock = asyncio.Lock(loop=event_loop.async_loop)
+        self._wait_for_pump = asyncio.Condition(self._pump_lock, loop=event_loop.async_loop)
         # set attributes
         self._config = config
         self._active_limit = active_limit
-        self._devices = []
         self._working_pumps = 0
-        self.working_hours = working_hours
         # create pin factory
         self._pin_factory = native.NativeFactory() if not dry_run else mock.MockFactory()
+        # logger
+        if config is not None:
+            self._logger = logging.getLogger(config.env_name)
 
     @property
     def pin_factory(self) -> local.PiFactory:
@@ -77,71 +104,32 @@ class PinManager(object):
         return self._pin_factory
 
     @property
-    def working_hours(self) -> Optional[Tuple[time, time]]:
+    def silent_hours(self) -> Optional[Tuple[time, time]]:
         """Returns set working hours"""
         with self._pump_lock:
             if self._config:
                 return self._config.silent_hours
             else:
-                return self._working_hours
-
-    @working_hours.setter
-    def working_hours(self, value: (time, time)) -> None:
-        assert self._config is None
-        with self._pump_lock:
-            if value is None:
-                return
-            if value[1] < value[0]:
-                raise ValueError(f'Working hours begin after they ends')
-            self._working_hours = value
+                return None
 
     @property
-    def active_limit(self):
+    def active_limit(self) -> int:
         """Limit of parallel working pumps"""
-        with self._pump_lock:
-            if self._config:
-                return self._config.active_limit
-            else:
-                return self._active_limit
+        if self._config:
+            return self._config.active_limit
+        else:
+            return self._active_limit
 
-    @active_limit.setter
-    def active_limit(self, value) -> None:
-        assert self._config is None
-        with self._pump_lock:
-            self._active_limit = value
-
-    @property
-    def working_pumps(self) -> int:
-        """Number of working pumps"""
-        with self._pump_lock:
-            return self._working_pumps
-
-    def calc_working_hours(self) -> timedelta:
-        """Calculates time to next watering
-
-        Returns:
-            (timedelta): time to next watering
-        """
-        if self._working_hours is not None:
-            if datetime.now().time() < self.working_hours[0]:
-                return datetime.combine(date.today(), self.working_hours[0]) - datetime.now()
-            if self.working_hours[1] <= datetime.now().time():
-                return datetime.combine(date.today() + timedelta(days=1), self.working_hours[1]) - datetime.now()
-        return timedelta(0)
-
-    def acquire_lock(self) -> None:
+    async def acquire_lock(self) -> None:
         """Acquires pump lock"""
-        with self._pump_lock:
-            while self._working_pumps >= self._active_limit:
-                self._wait_for_pump.wait()
-            else:
-                self._working_pumps += 1
+        async with self._pump_lock:
+            if self._working_pumps >= self.active_limit:
+                await self._wait_for_pump.wait()
+            self._working_pumps += 1
 
-    def release_lock(self) -> None:
-        """
-        Releases pump lock
-        """
-        with self._pump_lock:
+    async def release_lock(self) -> None:
+        """Releases pump lock"""
+        async with self._pump_lock:
             self._working_pumps -= 1
             self._wait_for_pump.notify()
 
@@ -154,6 +142,5 @@ class PinManager(object):
         Returns
             LimitedDigitalOutputDevice
         """
-        device = LimitedDigitalOutputDevice(self, pin=pin_number, pin_factory=self.pin_factory)
-        self._devices.append(device)
+        device = LimitedDigitalOutputDevice(self, pin=pin_number, pin_factory=self.pin_factory, config=self._config)
         return device

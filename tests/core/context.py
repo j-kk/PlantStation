@@ -3,8 +3,7 @@ import pathlib
 
 import pytest
 
-from PlantStation.core import Plant
-from core import EnvironmentConfig, Environment
+from PlantStation.core import EnvironmentConfig, Environment, Plant
 
 MIN_GPIO_NUMBER = 4
 MAX_GPIO_NUMBER = 53
@@ -19,8 +18,6 @@ EVENING = datetime.time(22, 0)
 MIDNIGHT = datetime.time(0, 0)
 
 plants = []
-
-
 
 
 @pytest.fixture(autouse=True)
@@ -63,11 +60,9 @@ def complete_env_config(request, simple_env_config):
     return env
 
 
-
-
 def create_plant_simple(env_config, pin, *args, **kwargs):
     plant = Plant(plantName='test_plant_' + str(pin), envConfig=env_config, wateringDuration=TIMEDELTA_SHORT,
-                         wateringInterval=TIMEDELTA_LONG, gpioPinNumber='GPIO' + str(pin), *args, **kwargs)
+                  wateringInterval=TIMEDELTA_LONG, gpioPinNumber='GPIO' + str(pin), *args, **kwargs)
     plants.append(plant)
     assert plant.isActive == kwargs.get('isActive', True)
     assert plant.plantName == 'test_plant_' + str(pin)
@@ -77,18 +72,16 @@ def create_plant_simple(env_config, pin, *args, **kwargs):
     assert plant.gpioPinNumber == 'GPIO' + str(pin)
     return plant
 
+
 @pytest.fixture(params=list(range(PLANT_SET_COUNT)))
 def add_plants_to_config(request, simple_env_config):
     plants = []
     for pin in range(MIN_GPIO_NUMBER, MIN_GPIO_NUMBER + request.param):
         plant = Plant(plantName='test_plant_' + str(pin), envConfig=simple_env_config,
-                            wateringDuration=TIMEDELTA_SHORT, wateringInterval=TIMEDELTA_LONG,
-                            gpioPinNumber='GPIO' + str(pin))
+                      wateringDuration=TIMEDELTA_SHORT, wateringInterval=TIMEDELTA_LONG,
+                      gpioPinNumber='GPIO' + str(pin))
         del plant
     assert len(simple_env_config.list_plants()) == request.param
-
-
-
 
 
 @pytest.yield_fixture()
@@ -97,5 +90,3 @@ def create_env(request, complete_env_config, add_plants_to_config):
     assert len(env.config.list_plants()) == len(env.plants)
     yield env
     del env
-
-
