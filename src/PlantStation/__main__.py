@@ -1,5 +1,4 @@
 import argparse
-import logging
 import sys
 from pathlib import Path
 
@@ -7,7 +6,7 @@ from PlantStation.App import App
 from PlantStation.configurer.defaults import GLOBAL_CFG_PATH, USER_CFG_PATH
 from PlantStation.core.helpers.logger import get_root_logger
 
-if __name__ == '__main__':
+def run():
 
     parser = argparse.ArgumentParser(description='Plantstation daemon')
     parser.add_argument('-p', '--config-path', action='store', nargs=1, help='Path to config file')
@@ -32,14 +31,13 @@ if __name__ == '__main__':
         config_path = GLOBAL_CFG_PATH.joinpath('environment.cfg')
     else:
         logger.error(f'Config not found. Quitting')
+        print(f'Config not found. Quitting')
         sys.exit(1)
     logger.info(f'Found config: {config_path}')
 
-    # try:
     app = App(config_path=config_path, dry_run=args.dry_run)
 
     app.run()
-    # except Exception as err:
-    #     logger.error(f'Received exception: {err}')
-    #     sys.exit(1)
 
+if __name__ == '__main__':
+    run()
