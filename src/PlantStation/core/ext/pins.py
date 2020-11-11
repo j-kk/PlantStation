@@ -58,14 +58,15 @@ class LimitedDigitalOutputDevice(DigitalOutputDevice):
         """
         if self._config.calc_working_hours().total_seconds() > 0 and not force:
             raise SilentHoursException
-
-        await self._manager.acquire_lock()
-        self.on()
-        self._logger.debug(f'Pin {self._pin} is on')
-        await asyncio.shield(asyncio.sleep(duration.total_seconds()))
-        self.off()
-        self._logger.debug(f'Pin {self._pin} is off')
-        await asyncio.shield(self._manager.release_lock())
+        try:
+            await self._manager.acquire_lock()
+            self.on()
+            self._logger.debug(f'Pin {self._pin} is on')
+            await asyncio.sleep(duration.total_seconds())
+        finally:
+            self.off()
+            self._logger.debug(f'Pin {self._pin} is off')
+            await asyncio.shield(self._manager.release_lock())
 
 
 class PinManager(object):

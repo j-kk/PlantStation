@@ -225,7 +225,7 @@ class EnvironmentConfig(Config):
                 window = datetime.datetime.combine(day, silent_hours[0]), datetime.datetime.combine(day,
                                                                                                     silent_hours[1])
                 if window[0] > window[1]:
-                    window[1] += datetime.timedelta(days=1)
+                    window = window[0], window[1] + datetime.timedelta(days=1)
 
                 if window[0] <= now < window[1]:
                     return window[1] - now
