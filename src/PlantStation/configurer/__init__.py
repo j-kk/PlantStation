@@ -1,4 +1,7 @@
 from .Configure import Configurer
 
 def run():
-    Configurer()
+    try:
+        Configurer()
+    except InterruptedError or KeyboardInterrupt:
+        pass

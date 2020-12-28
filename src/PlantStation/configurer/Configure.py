@@ -1,7 +1,6 @@
 import argparse
 import datetime
 import getpass
-import logging
 import subprocess
 import sys
 
@@ -10,8 +9,8 @@ from gpiozero import DigitalOutputDevice, GPIOZeroError, Device, pins
 
 from PlantStation.configurer.defaults import *
 from PlantStation.core import Config
-from PlantStation.core.helpers import parse_time, does_throw
 from PlantStation.core import EnvironmentConfig, Plant
+from PlantStation.core.helpers import parse_time, does_throw
 
 
 class EnvironmentCreator(object):
@@ -25,97 +24,102 @@ class EnvironmentCreator(object):
     def __init__(self, debug=False, dry_run=False):
         self.debug = debug
         self.dry_run = dry_run
-        # Get general data like config name & location
-        questions = [
-            {
-                'type': 'input',
-                'message': 'Enter environment name:',
-                'name': 'envName',
-                'validate': lambda name: name != ''
-            },
-            {
-                'type': 'list',
-                'message': 'Choose configuration location:',
-                'name': 'cfg_location',
-                'choices': ['Default user location (recommended)', 'Default system location', 'Current location',
-                            'Specify']
-            },
-            {
-                'type': 'input',
-                'message': 'How many pumps should work simultanously?',
-                'name': 'ActiveLimit',
-                'default': '1',
-                'validate': lambda t: does_throw(int, t)
 
-            },
-            {
-                'type': 'confirm',
-                'message': 'Specify working hours? (who wants burping at the midnight?)',
-                'name': 'WorkingHours',
-                'default': False
-            }
-        ]
-        answers = prompt(questions)
-        self.env_name = answers['envName']
-        self.workingHours = str(answers['WorkingHours'])
-        self.config = EnvironmentConfig(self.env_name)
-        self.config.active_limit = answers['ActiveLimit']
-
-        # Generate paths to config destinations
-        local_path = Path.cwd().joinpath(Path(self.env_name + '.cfg'))
-
-        if answers['cfg_location'] == 'Specify':
+        try:  # Catch interruptions
+            # Get general data like config name & location
             questions = [
                 {
                     'type': 'input',
-                    'message': 'Enter path',
-                    'name': 'cfg_path',
-                    'validate': lambda p: Path(p).is_dir()
-                }
-            ]
-            answers = prompt(questions)
-            paths = [Path(answers['cfg_path']).joinpath(Path(self.env_name + '.cfg')), local_path]
-        elif answers['cfg_location'] == 'System location':
-            paths = [GLOBAL_CFG_PATH.joinpath(Path(self.env_name + '.cfg')), local_path]
-        elif answers['cfg_location'] == 'Default user location (recommended)':
-            paths = [USER_CFG_PATH.joinpath(Path(self.env_name + '.cfg')), local_path]
-        else:
-            paths = [local_path]
-
-        for path in paths:
-            try:
-                self.config.path = path
-                break
-            except ValueError or IsADirectoryError as exc:
-                raise exc
-
-        if answers['WorkingHours']:
-            questions = [
+                    'message': 'Enter environment name:',
+                    'name': 'envName',
+                    'validate': lambda name: name != ''
+                },
                 {
-                    'type': 'input',
-                    'message': 'Enter begin of the working hours (HH:MM)',
-                    'name': 'WorkingHoursBegin',
-                    'validate': lambda t: does_throw(datetime.time.fromisoformat, [t])
+                    'type': 'list',
+                    'message': 'Choose configuration location:',
+                    'name': 'cfg_location',
+                    'choices': ['Default user location (recommended)', 'Default system location', 'Current location',
+                                'Specify']
                 },
                 {
                     'type': 'input',
-                    'message': 'Enter end of the working hours (HH:MM)',
-                    'name': 'WorkingHoursEnd',
-                    'validate': lambda t: does_throw(datetime.time.fromisoformat, [t])
+                    'message': 'How many pumps should work simultanously?',
+                    'name': 'ActiveLimit',
+                    'default': '1',
+                    'validate': lambda t: does_throw(int, t)
+
+                },
+                {
+                    'type': 'confirm',
+                    'message': 'Specify working hours? (who wants burping at the midnight?)',
+                    'name': 'WorkingHours',
+                    'default': False
                 }
             ]
             answers = prompt(questions)
-            self.config.silent_hours = (datetime.time.fromisoformat(answers['WorkingHoursEnd']),
-                                        datetime.time.fromisoformat(answers['WorkingHoursBegin']))
+            self.env_name = answers['envName']
+            self.workingHours = str(answers['WorkingHours'])
+            self.config = EnvironmentConfig(self.env_name)
+            self.config.active_limit = answers['ActiveLimit']
 
-        if self.dry_run:
-            Device.pin_factory = pins.mock.MockFactory()
-            self.dry_run = True
-        else:
-            Device.pin_factory = pins.native.NativeFactory()
-        for pin_number in PI_GPIO:
-            if self._check_pin(pin_number):
-                self._create_plant(pin_number)
+            # Generate paths to config destinations
+            local_path = Path.cwd().joinpath(Path(self.env_name + '.cfg'))
+
+            if answers['cfg_location'] == 'Specify':
+                questions = [
+                    {
+                        'type': 'input',
+                        'message': 'Enter path',
+                        'name': 'cfg_path',
+                        'validate': lambda p: Path(p).is_dir()
+                    }
+                ]
+                answers = prompt(questions)
+                paths = [Path(answers['cfg_path']).joinpath(Path(self.env_name + '.cfg')), local_path]
+            elif answers['cfg_location'] == 'System location':
+                paths = [GLOBAL_CFG_PATH.joinpath(Path(self.env_name + '.cfg')), local_path]
+            elif answers['cfg_location'] == 'Default user location (recommended)':
+                paths = [USER_CFG_PATH.joinpath(Path(self.env_name + '.cfg')), local_path]
+            else:
+                paths = [local_path]
+
+            for path in paths:
+                try:
+                    self.config.path = path
+                    break
+                except ValueError or IsADirectoryError as exc:
+                    raise exc
+
+            if answers['WorkingHours']:
+                questions = [
+                    {
+                        'type': 'input',
+                        'message': 'Enter begin of the working hours (HH:MM)',
+                        'name': 'WorkingHoursBegin',
+                        'validate': lambda t: does_throw(datetime.time.fromisoformat, [t])
+                    },
+                    {
+                        'type': 'input',
+                        'message': 'Enter end of the working hours (HH:MM)',
+                        'name': 'WorkingHoursEnd',
+                        'validate': lambda t: does_throw(datetime.time.fromisoformat, [t])
+                    }
+                ]
+                answers = prompt(questions)
+                self.config.silent_hours = (datetime.time.fromisoformat(answers['WorkingHoursEnd']),
+                                            datetime.time.fromisoformat(answers['WorkingHoursBegin']))
+
+            if self.dry_run:
+                Device.pin_factory = pins.mock.MockFactory()
+                self.dry_run = True
+            else:
+                Device.pin_factory = pins.native.NativeFactory()
+            for pin_number in PI_GPIO:
+                if self._check_pin(pin_number):
+                    self._create_plant(pin_number)
+
+        except KeyError:
+            raise KeyboardInterrupt
 
         self.config.write()
 
@@ -273,4 +277,3 @@ class Configurer():
             else:
                 print(f'Couldn\'t create service files. Quitting!')
             sys.exit(1)
-

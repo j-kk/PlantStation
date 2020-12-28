@@ -16,7 +16,7 @@ def update_config(propertySetter: Callable):
     def wrapper(self, value, *args, **kwargs):
         propertySetter(self, value, *args, **kwargs)
         if isinstance(value, datetime):
-            self._envConfig.update_section(self._plantName, propertySetter.__name__, value.strftime('%Y-%m-%d %X'))
+            self._envConfig.update_section(self._plantName, propertySetter.__name__, value.strftime('%04Y-%m-%d %X'))
         else:
             self._envConfig.update_section(self._plantName, propertySetter.__name__, str(value))
 

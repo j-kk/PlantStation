@@ -10,7 +10,7 @@ from typing import Tuple, List, Optional
 DEFAULT_ACTIVE_LIMIT = 1
 
 
-class Config(object):
+class Config:
     """
         Thrad safe config structure with logging
     """
@@ -20,7 +20,7 @@ class Config(object):
     _cfg_lock: RLock
     _logger: logging.Logger
 
-    def __init__(self, path: Path, logger_suffix: Optional[str] = None):
+    def __init__(self, path: Path, logger_suffix: str = ''):
         """
             Default constructor. Uses program's logger
 
@@ -63,7 +63,7 @@ class Config(object):
                 if value.is_dir():
                     raise IsADirectoryError()
                 if not value.parent.is_dir():
-                    self._path.parent.mkdir(parents=True)
+                    value.parent.mkdir(parents=True)
                 if self._path:
                     shutil.move(self._path, value)
             self._path = value
@@ -73,6 +73,9 @@ class Config(object):
             Reads content from config file. Thread safe
         """
         with self._cfg_lock:
+            if not self.path.exists():
+                self._logger.critical(f'Config file {self.path} not found')
+                raise FileNotFoundError(f'Error: environment config file not found. Quitting!')
             if not self._cfg_parser.read(self.path):
                 self._logger.critical(f'Config file {self.path} not found')
                 raise FileNotFoundError(f'Error: environment config file not found. Quitting!')

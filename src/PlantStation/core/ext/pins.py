@@ -26,7 +26,7 @@ class LimitedDigitalOutputDevice(DigitalOutputDevice):
     _manager: "PinManager"
     _logger: logging.Logger
 
-    def __init__(self, manager, config: EnvironmentConfig, **kwargs):
+    def __init__(self, manager: "PinManager", config: EnvironmentConfig, **kwargs):
         super().__init__(**kwargs)
         self._logger = logging.getLogger(__name__ + ':gpio')
         self._manager = manager
@@ -143,5 +143,6 @@ class PinManager(object):
         Returns
             LimitedDigitalOutputDevice
         """
-        device = LimitedDigitalOutputDevice(self, pin=pin_number, pin_factory=self.pin_factory, config=self._config)
+        device = LimitedDigitalOutputDevice(self, pin=pin_number, pin_factory=self.pin_factory, config=self._config,
+                                            active_high=False)
         return device
