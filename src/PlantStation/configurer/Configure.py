@@ -181,7 +181,7 @@ class ServiceCreatorConfig(Config):
     def __init__(self, service_path: Path, path_to_config: Path):
         super().__init__(path=service_path)
         self._cfg_parser['Unit'] = {
-            'Description': 'PlantStation service',  # TODO subparser
+            'Description': 'PlantStation watering keeper service',
             'After': 'network.target',
             'StartLimitIntervalSec': 0
         }
@@ -192,13 +192,16 @@ class ServiceCreatorConfig(Config):
             'Type': 'simple',
             'Restart': 'always',
             'RestartSec': '3',
-            'User': getpass.getuser(),
             'ExecStart': ExecStart
         }
         self._cfg_parser['Install'] = {
             'WantedBy': 'multi-user.target'
         }
         self.write()
+
+        print(f'Service succesfully created. Run:'
+              f'    systemctl --user daemon-reload'
+              f'to reload systemctl daemon & activate PlantStation service')
 
 
 class Configurer():

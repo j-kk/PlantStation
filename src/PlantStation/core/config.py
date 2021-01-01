@@ -86,6 +86,8 @@ class Config:
         """Writes config to file. Thread safe"""
         with self._cfg_lock:
             try:
+                if not self.path.parent.exists():
+                    self.path.parent.mkdir(parents=True)
                 cfg_file = open(self.path, 'w')
                 self._cfg_parser.write(cfg_file)
                 self._logger.debug(f'Saved config file in {self._path}')
